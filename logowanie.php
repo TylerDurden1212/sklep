@@ -1,6 +1,12 @@
 <?php
-// logowanie.php
 session_start();
+
+// Jeśli już zalogowany, przekieruj
+if (!empty($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit;
+}
+
 $host = "localhost";
 $user = "root";
 $pass = "";
@@ -13,46 +19,10 @@ if ($conn->connect_error) {
 $conn->set_charset("utf8mb4");
 
 $errors = [];
-$success = '';
-
-// Rejestracja
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'register') {
-    $username = trim($_POST['username'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $password2 = $_POST['password2'] ?? '';
-
-    if ($username === '' || $email === '' || $password === '') {
-        $errors[] = "Wszystkie pola są wymagane.";
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = "Nieprawidłowy adres e-mail.";
-    } elseif ($password !== $password2) {
-        $errors[] = "Hasła nie są takie same.";
-    } else {
-        // Sprawdź unikalność username/email
-        $stmt = $conn->prepare("SELECT id FROM logi WHERE username = ? OR email = ? LIMIT 1");
-        $stmt->bind_param("ss", $username, $email);
-        $stmt->execute();
-        $stmt->store_result();
-        if ($stmt->num_rows > 0) {
-            $errors[] = "Nazwa użytkownika lub adres e-mail już istnieje.";
-        } else {
-            $hash = password_hash($password, PASSWORD_DEFAULT);
-            $ins = $conn->prepare("INSERT INTO logi (username, password, email) VALUES (?, ?, ?)");
-            $ins->bind_param("sss", $username, $hash, $email);
-            if ($ins->execute()) {
-                $success = "Konto utworzone. Możesz się teraz zalogować.";
-            } else {
-                $errors[] = "Błąd przy tworzeniu konta.";
-            }
-            $ins->close();
-        }
-        $stmt->close();
-    }
-}
+$success = $_GET['success'] ?? '';
 
 // Logowanie
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'login') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usernameOrEmail = trim($_POST['username_or_email'] ?? '');
     $password = $_POST['password'] ?? '';
 
@@ -63,99 +33,407 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $stmt->bind_param("ss", $usernameOrEmail, $usernameOrEmail);
         $stmt->execute();
         $res = $stmt->get_result();
+        
         if ($row = $res->fetch_assoc()) {
             if (password_verify($password, $row['password'])) {
-                // zaloguj
+                // Zaloguj użytkownika
                 $_SESSION['user_id'] = (int)$row['id'];
                 $_SESSION['username'] = $row['username'];
                 $_SESSION['email'] = $row['email'];
-                // przekierowanie np. do panelu lub sklepu
-                header("Location: sklep.php");
+                
+                // Aktualizuj ostatnią aktywność
+                $updateStmt = $conn->prepare("UPDATE logi SET last_activity = NOW() WHERE id = ?");
+                $updateStmt->bind_param("i", $row['id']);
+                $updateStmt->execute();
+                $updateStmt->close();
+                
+                header("Location: index.php");
                 exit;
             } else {
                 $errors[] = "Nieprawidłowe hasło.";
             }
         } else {
-            $errors[] = "Brak takiego użytkownika.";
+            $errors[] = "Nie znaleziono użytkownika.";
         }
         $stmt->close();
     }
 }
-
 ?>
 <!doctype html>
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<title>Logowanie / Rejestracja</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logowanie - Sklep Online</title>
 <style>
-body{font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;padding:30px}
-.wrap{max-width:920px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.card{background:#fff;padding:20px;border-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,0.08)}
-h2{margin-top:0}
-.alert{padding:10px;border-radius:6px;margin-bottom:10px}
-.err{background:#ffefef;color:#900}
-.ok{background:#e6ffed;color:#085}
-label{display:block;font-size:14px;margin-top:8px}
-input[type=text],input[type=email],input[type=password]{width:100%;padding:8px;border:1px solid #ccc;border-radius:6px}
-button{margin-top:12px;padding:10px 14px;border:none;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer}
-.topbar{margin-bottom:18px;text-align:center}
-.logged{background:#fff;padding:12px;border-radius:8px;text-align:center}
-a.link{color:#2563eb;text-decoration:none}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.login-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    max-width: 1000px;
+    width: 100%;
+    background: white;
+    border-radius: 25px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: slideUp 0.5s;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.left-side {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 60px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.left-side h1 {
+    font-size: 42px;
+    margin-bottom: 20px;
+}
+
+.left-side .subtitle {
+    font-size: 18px;
+    opacity: 0.9;
+    line-height: 1.6;
+    margin-bottom: 40px;
+}
+
+.feature {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.feature-icon {
+    width: 60px;
+    height: 60px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    flex-shrink: 0;
+}
+
+.feature-text h3 {
+    font-size: 18px;
+    margin-bottom: 5px;
+}
+
+.feature-text p {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+.right-side {
+    padding: 60px 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.login-header h2 {
+    font-size: 36px;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.login-header p {
+    color: #666;
+    font-size: 15px;
+}
+
+.alert {
+    padding: 15px 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.alert-error {
+    background: #fee;
+    color: #c33;
+    border-left: 4px solid #c33;
+}
+
+.alert-success {
+    background: #efe;
+    color: #3c3;
+    border-left: 4px solid #3c3;
+}
+
+.form-group {
+    margin-bottom: 25px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+input[type=text], input[type=password] {
+    width: 100%;
+    padding: 14px 18px;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 15px;
+    transition: 0.3s;
+}
+
+input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+button {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+}
+
+.divider {
+    text-align: center;
+    margin: 30px 0;
+    color: #999;
+    font-size: 14px;
+    position: relative;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: #e0e0e0;
+}
+
+.divider::before {
+    left: 0;
+}
+
+.divider::after {
+    right: 0;
+}
+
+.register-link {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.register-link a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.register-link a:hover {
+    text-decoration: underline;
+}
+
+.back-link {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.back-link a {
+    color: #999;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.back-link a:hover {
+    color: #667eea;
+}
+
+.password-toggle {
+    position: relative;
+}
+
+.password-toggle input {
+    padding-right: 50px;
+}
+
+.toggle-icon {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 20px;
+    user-select: none;
+}
+
+@media (max-width: 768px) {
+    .login-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .left-side {
+        padding: 40px 30px;
+    }
+    
+    .right-side {
+        padding: 40px 30px;
+    }
+    
+    .left-side h1 {
+        font-size: 32px;
+    }
+}
 </style>
 </head>
 <body>
-<div class="topbar">
-  <?php if (!empty($_SESSION['user_id'])): ?>
-    <div class="logged">
-      Zalogowany jako <strong><?=htmlspecialchars($_SESSION['username'])?></strong> (<?=htmlspecialchars($_SESSION['email'])?>)
-      <br><a class="link" href="dodaj_produkt.php">➕ Dodaj produkt</a> • <a class="link" href="logout.php">Wyloguj</a>
+
+<div class="login-container">
+    <div class="left-side">
+        <h1>🛍️ Witaj ponownie!</h1>
+        <p class="subtitle">Zaloguj się, aby kontynuować kupowanie i sprzedawanie wspaniałych produktów.</p>
+        
+        <div class="feature">
+            <div class="feature-icon">🚀</div>
+            <div class="feature-text">
+                <h3>Szybkie transakcje</h3>
+                <p>Kupuj i sprzedawaj w kilka kliknięć</p>
+            </div>
+        </div>
+        
+        <div class="feature">
+            <div class="feature-icon">💬</div>
+            <div class="feature-text">
+                <h3>Czat w czasie rzeczywistym</h3>
+                <p>Komunikuj się bezpośrednio ze sprzedawcami</p>
+            </div>
+        </div>
+        
+        <div class="feature">
+            <div class="feature-icon">🔒</div>
+            <div class="feature-text">
+                <h3>Bezpieczeństwo</h3>
+                <p>Twoje dane są chronione</p>
+            </div>
+        </div>
     </div>
-  <?php else: ?>
-    <h1>Logowanie / Rejestracja</h1>
-  <?php endif; ?>
+
+    <div class="right-side">
+        <div class="login-header">
+            <h2>Zaloguj się</h2>
+            <p>Wprowadź swoje dane logowania</p>
+        </div>
+
+        <?php if ($success): ?>
+            <div class="alert alert-success">
+                ✅ <?= htmlspecialchars($success) ?>
+            </div>
+        <?php endif; ?>
+        
+        <?php foreach ($errors as $error): ?>
+            <div class="alert alert-error">
+                ⚠️ <?= htmlspecialchars($error) ?>
+            </div>
+        <?php endforeach; ?>
+
+        <form method="post">
+            <div class="form-group">
+                <label>Nazwa użytkownika lub e-mail</label>
+                <input type="text" 
+                       name="username_or_email" 
+                       placeholder="Wpisz swoją nazwę lub email"
+                       value="<?= htmlspecialchars($_POST['username_or_email'] ?? '') ?>"
+                       required 
+                       autofocus>
+            </div>
+            
+            <div class="form-group">
+                <label>Hasło</label>
+                <div class="password-toggle">
+                    <input type="password" 
+                           name="password" 
+                           id="password"
+                           placeholder="Wpisz swoje hasło"
+                           required>
+                    <span class="toggle-icon" onclick="togglePassword()">👁️</span>
+                </div>
+            </div>
+            
+            <button type="submit">🔑 Zaloguj się</button>
+        </form>
+
+        <div class="divider">lub</div>
+
+        <div class="register-link">
+            Nie masz konta? <a href="rejestracja.php">Zarejestruj się tutaj</a>
+        </div>
+
+        <div class="back-link">
+            <a href="index.php">← Powrót do sklepu</a>
+        </div>
+    </div>
 </div>
 
-<div class="wrap">
-  <!-- Rejestracja -->
-  <div class="card">
-    <h2>Rejestracja</h2>
-    <?php if ($success): ?><div class="alert ok"><?=htmlspecialchars($success)?></div><?php endif; ?>
-    <?php foreach ($errors as $e): ?>
-      <div class="alert err"><?=htmlspecialchars($e)?></div>
-    <?php endforeach; ?>
-    <form method="post" action="">
-      <input type="hidden" name="action" value="register">
-      <label>Nazwa użytkownika
-        <input type="text" name="username" maxlength="100" required>
-      </label>
-      <label>E-mail
-        <input type="email" name="email" maxlength="255" required>
-      </label>
-      <label>Hasło
-        <input type="password" name="password" required>
-      </label>
-      <label>Powtórz hasło
-        <input type="password" name="password2" required>
-      </label>
-      <button type="submit">Zarejestruj się</button>
-    </form>
-  </div>
+<script>
+function togglePassword() {
+    const passwordInput = document.getElementById('password');
+    const toggleIcon = document.querySelector('.toggle-icon');
+    
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.textContent = '🙈';
+    } else {
+        passwordInput.type = 'password';
+        toggleIcon.textContent = '👁️';
+    }
+}
+</script>
 
-  <!-- Logowanie -->
-  <div class="card">
-    <h2>Logowanie</h2>
-    <form method="post" action="">
-      <input type="hidden" name="action" value="login">
-      <label>Nazwa użytkownika lub e-mail
-        <input type="text" name="username_or_email" maxlength="255" required>
-      </label>
-      <label>Hasło
-        <input type="password" name="password" required>
-      </label>
-      <button type="submit">Zaloguj się</button>
-    </form>
-  </div>
-</div>
 </body>
 </html>
+<?php $conn->close(); ?>
