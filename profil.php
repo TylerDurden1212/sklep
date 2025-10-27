@@ -1,7 +1,7 @@
 <?php
 session_start();
 if (empty($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header("Location: logowanie.php");
     exit;
 }
 
@@ -24,7 +24,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['user_id'] == $profile_id
     $ig = $_POST['ig'] ?? '';
     
     // Obsługa zdjęcia profilowego
-    $profilePicturePath = null;
     if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
         $uploadDir = __DIR__ . "/uploads/profiles/";
         if (!file_exists($uploadDir)) {
@@ -39,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['user_id'] == $profile_id
             if (move_uploaded_file($_FILES['profile_picture']['tmp_name'], $target)) {
                 $profilePicturePath = "uploads/profiles/" . $fileName;
                 
-                // Usuń stare zdjęcie
+                // WAŻNE: Usuń stare zdjęcie z serwera
                 $stmt = $conn->prepare("SELECT profile_picture FROM logi WHERE id=?");
                 $stmt->bind_param("i", $profile_id);
                 $stmt->execute();
@@ -49,32 +48,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['user_id'] == $profile_id
                 if ($oldPic && !empty($oldPic['profile_picture'])) {
                     $oldPath = __DIR__ . "/" . $oldPic['profile_picture'];
                     if (file_exists($oldPath)) {
-                        unlink($oldPath);
+                        unlink($oldPath); // Usuń stary plik
                     }
                 }
                 
+                // Zapisz nową ścieżkę do bazy
                 $stmt = $conn->prepare("UPDATE logi SET profile_picture=? WHERE id=?");
                 $stmt->bind_param("si", $profilePicturePath, $profile_id);
                 $stmt->execute();
                 $stmt->close();
+                
+                $msg = "Zdjęcie profilowe zostało zmienione!";
+                $msgType = "success";
             }
         }
     }
     
+    // Aktualizuj bio i Instagram
     $stmt = $conn->prepare("UPDATE logi SET bio=?, ig_link=? WHERE id=?");
     $stmt->bind_param("ssi", $bio, $ig, $profile_id);
     $stmt->execute();
     $stmt->close();
     
-    $msg = "Profil zaktualizowany pomyślnie!";
-    $msgType = "success";
+    if (empty($msg)) {
+        $msg = "Profil zaktualizowany pomyślnie!";
+        $msgType = "success";
+    }
 }
 
 // Usuwanie produktu
 if (isset($_GET['delete']) && $_SESSION['user_id'] == $profile_id) {
     $delete_id = intval($_GET['delete']);
     
-    // Pobierz ścieżkę zdjęcia przed usunięciem
+    // WAŻNE: Pobierz ścieżkę zdjęcia przed usunięciem
     $stmt = $conn->prepare("SELECT zdjecie FROM produkty WHERE id=? AND id_sprzedawcy=?");
     $stmt->bind_param("ii", $delete_id, $profile_id);
     $stmt->execute();
@@ -82,21 +88,21 @@ if (isset($_GET['delete']) && $_SESSION['user_id'] == $profile_id) {
     $stmt->close();
     
     if ($prodData) {
-        // Usuń produkt
+        // Usuń produkt z bazy
         $stmt = $conn->prepare("DELETE FROM produkty WHERE id=? AND id_sprzedawcy=?");
         $stmt->bind_param("ii", $delete_id, $profile_id);
         $stmt->execute();
         $stmt->close();
         
-        // Usuń zdjęcie z serwera
+        // WAŻNE: Usuń zdjęcie z serwera (folder uploads)
         if (!empty($prodData['zdjecie'])) {
             $imgPath = __DIR__ . "/" . $prodData['zdjecie'];
             if (file_exists($imgPath)) {
-                unlink($imgPath);
+                unlink($imgPath); // Usuń plik ze serwera
             }
         }
         
-        $msg = "Produkt został usunięty!";
+        $msg = "Produkt i jego zdjęcie zostały usunięte!";
         $msgType = "success";
     }
 }
@@ -122,12 +128,22 @@ $stmt->close();
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= htmlspecialchars($user['username']) ?> - Profil</title>
+<title><?= htmlspecialchars($user['username']) ?> - Profil | GórkaSklep.pl</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏔️</text></svg>">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --primary: #ff8c42;
+    --secondary: #ff6b35;
+    --accent: #ffa500;
+    --dark: #2c3e50;
+    --light: #fff5f0;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
     min-height: 100vh;
     padding: 20px;
 }
@@ -143,7 +159,7 @@ body {
     padding: 10px 20px;
     border-radius: 25px;
     text-decoration: none;
-    color: #667eea;
+    color: var(--primary);
     font-weight: bold;
     margin-bottom: 20px;
     transition: 0.3s;
@@ -181,7 +197,7 @@ body {
     height: 150px;
     border-radius: 50%;
     object-fit: cover;
-    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 10px 30px rgba(255, 140, 66, 0.3);
     border: 5px solid white;
 }
 
@@ -189,19 +205,19 @@ body {
     width: 150px;
     height: 150px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 60px;
     font-weight: bold;
-    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 10px 30px rgba(255, 140, 66, 0.3);
     border: 5px solid white;
 }
 
 .change-avatar-btn {
-    background: #667eea;
+    background: var(--primary);
     color: white;
     padding: 8px 16px;
     border-radius: 20px;
@@ -212,7 +228,7 @@ body {
 }
 
 .change-avatar-btn:hover {
-    background: #5568d3;
+    background: var(--secondary);
 }
 
 .profile-info {
@@ -240,14 +256,14 @@ body {
 .stat {
     text-align: center;
     padding: 15px 25px;
-    background: #f8f9fa;
+    background: var(--light);
     border-radius: 12px;
 }
 
 .stat-value {
     font-size: 28px;
     font-weight: bold;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -294,37 +310,7 @@ body {
 .form-group textarea:focus,
 .form-group input:focus {
     outline: none;
-    border-color: #667eea;
-}
-
-.file-upload-wrapper {
-    position: relative;
-}
-
-.file-upload-input {
-    display: none;
-}
-
-.file-upload-label {
-    display: block;
-    padding: 12px;
-    background: #f8f9fa;
-    border: 2px dashed #ccc;
-    border-radius: 10px;
-    text-align: center;
-    cursor: pointer;
-    transition: 0.3s;
-}
-
-.file-upload-label:hover {
-    border-color: #667eea;
-    background: #f0f0ff;
-}
-
-.file-name {
-    margin-top: 8px;
-    font-size: 13px;
-    color: #666;
+    border-color: var(--primary);
 }
 
 .btn {
@@ -338,13 +324,13 @@ body {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 8px 20px rgba(255, 140, 66, 0.4);
 }
 
 .alert {
@@ -368,7 +354,7 @@ body {
 }
 
 .bio-display {
-    background: #f8f9fa;
+    background: var(--light);
     padding: 20px;
     border-radius: 12px;
     color: #666;
@@ -380,17 +366,17 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    color: #667eea;
+    color: var(--primary);
     text-decoration: none;
     font-weight: 600;
     padding: 10px 20px;
-    background: #f0f0ff;
+    background: var(--light);
     border-radius: 25px;
     transition: 0.3s;
 }
 
 .ig-link:hover {
-    background: #e0e0ff;
+    background: #ffe0cc;
     transform: translateX(3px);
 }
 
@@ -447,13 +433,13 @@ body {
 }
 
 .product-name:hover {
-    color: #667eea;
+    color: var(--primary);
 }
 
 .product-price {
     font-size: 22px;
     font-weight: bold;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 12px;
@@ -487,12 +473,12 @@ body {
 }
 
 .btn-view {
-    background: #667eea;
+    background: var(--primary);
     color: white;
 }
 
 .btn-view:hover {
-    background: #5568d3;
+    background: var(--secondary);
 }
 
 .btn-delete {
@@ -534,6 +520,133 @@ body {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 15px;
     }
+    .header {
+    background: white;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    animation: slideDown 0.5s;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+.header-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 15px 20px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 25px;
+    align-items: center;
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.logo-section:hover {
+    transform: scale(1.02);
+}
+
+.logo-icon {
+    font-size: 48px;
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.logo-main {
+    font-size: 28px;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+    line-height: 1;
+}
+
+.logo-subtitle {
+    font-size: 11px;
+    color: #999;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.school-link {
+    font-size: 18px;
+    color: var(--primary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 2px;
+    transition: 0.3s;
+}
+
+.school-link:hover {
+    color: var(--secondary);
+    text-decoration: underline;
+}
+
+.search-section {
+    display: flex;
+    gap: 10px;
+}
+
+.search-bar {
+    flex: 1;
+    position: relative;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 14px 50px 14px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 30px;
+    font-size: 15px;
+    transition: 0.3s;
+}
+
+.search-bar input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
+}
+
+.search-btn {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+.search-btn:hover {
+    transform: translateY(-50%) scale(1.05);
+}
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 }
 </style>
 </head>
@@ -585,8 +698,8 @@ body {
                         <div class="stat-label">Dołączył</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-value">⭐</div>
-                        <div class="stat-label">Zweryfikowany</div>
+                        <div class="stat-value">🏫</div>
+                        <div class="stat-label">Szkoła</div>
                     </div>
                 </div>
             </div>
@@ -646,7 +759,7 @@ body {
                                  class="product-image" 
                                  onclick="window.location='produkt.php?id=<?= $p['id'] ?>'">
                         <?php else: ?>
-                            <img src="https://via.placeholder.com/280x220?text=Brak+zdjęcia" 
+                            <img src="https://via.placeholder.com/280x220/ff8c42/ffffff?text=Brak+zdjęcia" 
                                  class="product-image"
                                  onclick="window.location='produkt.php?id=<?= $p['id'] ?>'">
                         <?php endif; ?>
@@ -669,7 +782,7 @@ body {
                                     </a>
                                     <a href="profil.php?id=<?= $profile_id ?>&delete=<?= $p['id'] ?>" 
                                        class="btn-small btn-delete"
-                                       onclick="return confirm('Czy na pewno chcesz usunąć ten produkt?\n\n<?= htmlspecialchars($p['nazwa']) ?>')">
+                                       onclick="return confirm('Czy na pewno chcesz usunąć ten produkt?\n\n<?= htmlspecialchars($p['nazwa']) ?>\n\nZostanie usunięty również z serwera wraz ze zdjęciem.')">
                                         🗑️ Usuń
                                     </a>
                                 </div>

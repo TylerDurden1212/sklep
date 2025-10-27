@@ -599,6 +599,133 @@ body {
     .send-btn {
         width: 100%;
     }
+    .header {
+    background: white;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    animation: slideDown 0.5s;
+}
+
+    @keyframes slideDown {
+        from { transform: translateY(-100%); }
+        to { transform: translateY(0); }
+    }
+
+    .header-content {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 15px 20px;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 25px;
+        align-items: center;
+    }
+
+    .logo-section {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    .logo-section:hover {
+        transform: scale(1.02);
+    }
+
+    .logo-icon {
+        font-size: 48px;
+    }
+
+    .logo-text {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .logo-main {
+        font-size: 28px;
+        font-weight: 900;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.5px;
+        line-height: 1;
+    }
+
+    .logo-subtitle {
+        font-size: 11px;
+        color: #999;
+        font-weight: 600;
+        margin-top: 2px;
+    }
+
+    .school-link {
+        font-size: 18px;
+        color: var(--primary);
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        margin-top: 2px;
+        transition: 0.3s;
+    }
+
+    .school-link:hover {
+        color: var(--secondary);
+        text-decoration: underline;
+    }
+
+    .search-section {
+        display: flex;
+        gap: 10px;
+    }
+
+    .search-bar {
+        flex: 1;
+        position: relative;
+    }
+
+    .search-bar input {
+        width: 100%;
+        padding: 14px 50px 14px 20px;
+        border: 2px solid #e0e0e0;
+        border-radius: 30px;
+        font-size: 15px;
+        transition: 0.3s;
+    }
+
+    .search-bar input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
+    }
+
+    .search-btn {
+        position: absolute;
+        right: 5px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 25px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: 0.3s;
+    }
+
+    .search-btn:hover {
+        transform: translateY(-50%) scale(1.05);
+    }
+
+    .user-menu {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
 }
 </style>
 </head>
@@ -608,7 +735,46 @@ body {
     <span>⚠️</span>
     <span>Utracono połączenie. Próba ponownego połączenia...</span>
 </div>
+<div class="header">
+    <div class="header-content">
+        <div class="logo-section" onclick="window.location='index.php'">
+            <div class="logo-icon"><img src = "./images/logo.png" height = "50px" width = "50px"></div>
+            <div class="logo-text">
+                <div class="logo-main">GórkaSklep.pl</div>
+                <div class="logo-subtitle">Szkolny Sklep Internetowy</div>
+                <a href="https://lo2rabka.nowotarski.edu.pl" target="_blank" class="school-link" onclick="event.stopPropagation()">
+                     Przejdź na nasza stronę szkoły! 🏫
+                </a>
+            </div>
+        </div>
+        
+        <form class="search-section" method="get" action="index.php">
+            <div class="search-bar">
+                <input type="text" 
+                       name="search" 
+                       placeholder="Czego szukasz? 🔍" 
+                       value="<?= htmlspecialchars($search) ?>">
+                <button type="submit" class="search-btn">Szukaj</button>
+            </div>
+        </form>
 
+        <div class="user-menu">
+            <?php if (!empty($_SESSION['user_id'])): ?>
+                <a href="wiadomosci.php" class="menu-item messages">
+                    💬 Wiadomości
+                    <?php if ($unread_count > 0): ?>
+                        <span class="badge"><?= $unread_count ?></span>
+                    <?php endif; ?>
+                </a>
+                <a href="profil.php" class="menu-item">👤 Profil</a>
+                <a href="dodaj_produkt.php" class="btn-add">+ Dodaj</a>
+                <a href="logout.php" class="menu-item">Wyloguj</a>
+            <?php else: ?>
+                <a href="logowanie.php" class="btn-add">🔑 Zaloguj się</a>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
 <div class="container">
     <div class="chat-header">
         <button class="back-btn" onclick="window.location='wiadomosci.php'">

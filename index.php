@@ -59,24 +59,23 @@ $total_users = $conn->query("SELECT COUNT(*) as cnt FROM logi")->fetch_assoc()['
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>🛍️ Sklep Online - Twoje miejsce na zakupy</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛍️</text></svg>">
+<title>GórkaSklep.pl - Szkolny Sklep Internetowy</title>
+<link rel="icon" href="./images/logo_strona.png">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-    --primary: #667eea;
-    --secondary: #764ba2;
-    --success: #10b981;
-    --danger: #ef4444;
-    --warning: #f59e0b;
-    --dark: #1f2937;
-    --light: #f8f9fa;
+    --primary: #ff8c42;
+    --secondary: #ff6b35;
+    --accent: #ffa500;
+    --dark: #2c3e50;
+    --light: #fff5f0;
+    --white: #ffffff;
 }
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    background: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
     min-height: 100vh;
 }
 
@@ -98,26 +97,65 @@ body {
 .header-content {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 15px 20px;
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 25px;
     align-items: center;
 }
 
-.logo {
-    font-size: 32px;
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.logo-section:hover {
+    transform: scale(1.02);
+}
+
+.logo-icon {
+    font-size: 48px;
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.logo-main {
+    font-size: 28px;
     font-weight: 900;
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    cursor: pointer;
-    transition: 0.3s;
-    letter-spacing: -1px;
+    letter-spacing: -0.5px;
+    line-height: 1;
 }
 
-.logo:hover {
-    transform: scale(1.05);
+.logo-subtitle {
+    font-size: 11px;
+    color: #999;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.school-link {
+    font-size: 18px;
+    color: var(--primary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 2px;
+    transition: 0.3s;
+}
+
+.school-link:hover {
+    color: var(--secondary);
+    text-decoration: underline;
 }
 
 .search-section {
@@ -142,7 +180,7 @@ body {
 .search-bar input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
 }
 
 .search-btn {
@@ -197,7 +235,7 @@ body {
     position: absolute;
     top: -5px;
     right: -5px;
-    background: var(--danger);
+    background: #ef4444;
     color: white;
     border-radius: 50%;
     width: 22px;
@@ -223,12 +261,12 @@ body {
     text-decoration: none;
     font-weight: bold;
     transition: 0.3s;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 15px rgba(255, 140, 66, 0.3);
 }
 
 .btn-add:hover {
     transform: translateY(-3px);
-    box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+    box-shadow: 0 6px 25px rgba(255, 140, 66, 0.5);
 }
 
 /* Stats Banner */
@@ -428,7 +466,7 @@ body {
 }
 
 .seller-mini:hover {
-    background: #e0e0e0;
+    background: #ffe0cc;
 }
 
 .seller-avatar-mini {
@@ -511,6 +549,14 @@ body {
     .stats-banner {
         grid-template-columns: 1fr;
     }
+    
+    .logo-icon {
+        font-size: 36px;
+    }
+    
+    .logo-main {
+        font-size: 22px;
+    }
 }
 </style>
 </head>
@@ -518,7 +564,16 @@ body {
 
 <div class="header">
     <div class="header-content">
-        <div class="logo" onclick="window.location='index.php'">🛍️ SKLEP</div>
+        <div class="logo-section" onclick="window.location='index.php'">
+            <div class="logo-icon"><img src = "./images/logo.png" height = "50px" width = "50px"></div>
+            <div class="logo-text">
+                <div class="logo-main">GórkaSklep.pl</div>
+                <div class="logo-subtitle">Szkolny Sklep Internetowy</div>
+                <a href="https://lo2rabka.nowotarski.edu.pl" target="_blank" class="school-link" onclick="event.stopPropagation()">
+                     Przejdź na nasza stronę szkoły! 🏫
+                </a>
+            </div>
+        </div>
         
         <form class="search-section" method="get" action="index.php">
             <div class="search-bar">
@@ -542,7 +597,7 @@ body {
                 <a href="dodaj_produkt.php" class="btn-add">+ Dodaj</a>
                 <a href="logout.php" class="menu-item">Wyloguj</a>
             <?php else: ?>
-                <a href="login.php" class="btn-add">🔑 Zaloguj się</a>
+                <a href="logowanie.php" class="btn-add">🔑 Zaloguj się</a>
             <?php endif; ?>
         </div>
     </div>
@@ -564,10 +619,10 @@ body {
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon">✨</div>
+        <div class="stat-icon">🏫</div>
         <div class="stat-info">
             <h3>100%</h3>
-            <p>Bezpieczeństwo</p>
+            <p>Szkolna społeczność</p>
         </div>
     </div>
 </div>
@@ -600,9 +655,9 @@ body {
             <div class="card" onclick="window.location='produkt.php?id=<?= $row['id'] ?>'">
                 <div class="card-image-wrapper">
                     <?php if (!empty($row['zdjecie'])): ?>
-                        <img src="<?= htmlspecialchars($row['zdjecie']) ?>" alt="<?= htmlspecialchars($row['nazwa']) ?>" class="card-image" onerror="this.src='https://via.placeholder.com/300x280/667eea/ffffff?text=Brak+zdjęcia'">
+                        <img src="<?= htmlspecialchars($row['zdjecie']) ?>" alt="<?= htmlspecialchars($row['nazwa']) ?>" class="card-image" onerror="this.src='https://via.placeholder.com/300x280/ff8c42/ffffff?text=Brak+zdjęcia'">
                     <?php else: ?>
-                        <img src="https://via.placeholder.com/300x280/667eea/ffffff?text=Brak+zdjęcia" alt="" class="card-image">
+                        <img src="https://via.placeholder.com/300x280/ff8c42/ffffff?text=Brak+zdjęcia" alt="" class="card-image">
                     <?php endif; ?>
                     
                     <?php if (!empty($row['kategoria'])): ?>
@@ -678,7 +733,7 @@ setInterval(async () => {
     } catch(e) {
         console.error('Błąd sprawdzania wiadomości:', e);
     }
-}, 10000); // Co 10 sekund
+}, 10000);
 <?php endif; ?>
 </script>
 

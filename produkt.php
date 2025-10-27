@@ -1,16 +1,8 @@
 <?php
 session_start();
+require_once 'config.php';
 
-$host = "localhost";
-$user = "root";
-$pass = "";
-$dbname = "sklep";
-
-$conn = new mysqli($host, $user, $pass, $dbname);
-if ($conn->connect_error) {
-    die("Błąd połączenia: " . $conn->connect_error);
-}
-$conn->set_charset("utf8mb4");
+$conn = getDBConnection();
 
 $id = intval($_GET['id'] ?? 0);
 
@@ -26,6 +18,17 @@ if ($result->num_rows === 0) {
 }
 
 $produkt = $result->fetch_assoc();
+
+// Sprawdź czy użytkownik zalogowany
+$logged_in = !empty($_SESSION['user_id']);
+$current_user_id = $_SESSION['user_id'] ?? null;
+
+// Pobierz nieprzeczytane wiadomości
+$unread_count = 0;
+if ($logged_in) {
+    $unread_count = getUnreadCount($current_user_id, $conn);
+}
+
 $conn->close();
 ?>
 <!doctype html>
@@ -34,36 +37,141 @@ $conn->close();
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= htmlspecialchars($produkt['nazwa']) ?> - Sklep</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛍️</text></svg>">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --primary: #667eea;
+    --secondary: #764ba2;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --dark: #1f2937;
+    --light: #f8f9fa;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     min-height: 100vh;
-    padding: 20px;
 }
 
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-.back-link {
-    display: inline-block;
+/* Header */
+.header {
     background: white;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    animation: slideDown 0.5s;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+.header-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 25px;
+    align-items: center;
+}
+
+.logo {
+    font-size: 32px;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    cursor: pointer;
+    transition: 0.3s;
+    letter-spacing: -1px;
+}
+
+.logo:hover {
+    transform: scale(1.05);
+}
+
+.header-title {
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--dark);
+}
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.menu-item {
+    text-decoration: none;
+    color: var(--dark);
+    padding: 10px 18px;
+    border-radius: 25px;
+    background: var(--light);
+    transition: 0.3s;
+    font-weight: 600;
+    font-size: 14px;
+    position: relative;
+    white-space: nowrap;
+}
+
+.menu-item:hover {
+    background: var(--primary);
+    color: white;
+    transform: translateY(-2px);
+}
+
+.btn-add {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    color: white;
     padding: 12px 24px;
     border-radius: 25px;
     text-decoration: none;
-    color: #667eea;
     font-weight: bold;
-    margin-bottom: 20px;
     transition: 0.3s;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
 
-.back-link:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(255,255,255,0.3);
+.btn-add:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+}
+
+.badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: var(--danger);
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* Main Content */
+.container {
+    max-width: 1200px;
+    margin: 30px auto;
+    padding: 0 20px;
 }
 
 .product-container {
@@ -74,6 +182,18 @@ body {
     display: grid;
     grid-template-columns: 1.2fr 1fr;
     gap: 0;
+    animation: slideUp 0.5s;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .product-image-section {
@@ -95,7 +215,7 @@ body {
     padding: 10px 20px;
     border-radius: 25px;
     font-weight: bold;
-    color: #667eea;
+    color: var(--primary);
     box-shadow: 0 5px 15px rgba(0,0,0,0.2);
 }
 
@@ -108,7 +228,7 @@ body {
 .product-category {
     display: inline-block;
     background: #f0f0ff;
-    color: #667eea;
+    color: var(--primary);
     padding: 8px 16px;
     border-radius: 20px;
     font-size: 13px;
@@ -126,7 +246,7 @@ body {
 .product-price {
     font-size: 42px;
     font-weight: bold;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 25px;
@@ -205,7 +325,7 @@ body {
     width: 70px;
     height: 70px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
     display: flex;
     align-items: center;
@@ -259,7 +379,7 @@ body {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
 }
 
@@ -270,8 +390,8 @@ body {
 
 .btn-secondary {
     background: white;
-    color: #667eea;
-    border: 2px solid #667eea;
+    color: var(--primary);
+    border: 2px solid var(--primary);
 }
 
 .btn-secondary:hover {
@@ -283,7 +403,7 @@ body {
     padding: 20px;
     border-radius: 15px;
     margin-top: 20px;
-    border-left: 4px solid #ffc107;
+    border-left: 4px solid var(--warning);
 }
 
 .additional-info h4 {
@@ -299,6 +419,21 @@ body {
 }
 
 @media (max-width: 968px) {
+    .header-content {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .header-title {
+        order: 2;
+    }
+    
+    .user-menu {
+        order: 3;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
     .product-container {
         grid-template-columns: 1fr;
     }
@@ -327,9 +462,33 @@ body {
 </head>
 <body>
 
-<div class="container">
-    <a href="index.php" class="back-link">← Powrót do sklepu</a>
+<div class="header">
+    <div class="header-content">
+        <div class="logo" onclick="window.location='index.php'">🛍️ SKLEP</div>
+        
+        <div class="header-title">📦 Szczegóły produktu</div>
 
+        <div class="user-menu">
+            <?php if ($logged_in): ?>
+                <a href="index.php" class="menu-item">🏠 Strona główna</a>
+                <a href="wiadomosci.php" class="menu-item">
+                    💬 Wiadomości
+                    <?php if ($unread_count > 0): ?>
+                        <span class="badge"><?= $unread_count ?></span>
+                    <?php endif; ?>
+                </a>
+                <a href="profil.php" class="menu-item">👤 Profil</a>
+                <a href="dodaj_produkt.php" class="btn-add">+ Dodaj</a>
+                <a href="logout.php" class="menu-item">Wyloguj</a>
+            <?php else: ?>
+                <a href="index.php" class="menu-item">🏠 Strona główna</a>
+                <a href="logowanie.php" class="btn-add">🔑 Zaloguj się</a>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<div class="container">
     <div class="product-container">
         <div class="product-image-section">
             <?php if (!empty($produkt['zdjecie'])): ?>
@@ -340,32 +499,16 @@ body {
             
             <?php if (!empty($produkt['kategoria'])): ?>
                 <div class="image-badge">
-                    <?php
-                    $icons = [
-                        'elektronika' => '📱',
-                        'odziez' => '👕',
-                        'dom' => '🏠',
-                        'sport' => '⚽',
-                        'inne' => '📦'
-                    ];
-                    echo $icons[$produkt['kategoria']] ?? '📦';
-                    ?> <?= ucfirst($produkt['kategoria']) ?>
+                    <?php echo getCategoryIcon($produkt['kategoria']); ?> 
+                    <?php echo ucfirst($produkt['kategoria']); ?>
                 </div>
             <?php endif; ?>
         </div>
 
         <div class="product-details">
             <span class="product-category">
-                <?php
-                $categoryNames = [
-                    'elektronika' => '📱 Elektronika',
-                    'odziez' => '👕 Odzież',
-                    'dom' => '🏠 Dom i Ogród',
-                    'sport' => '⚽ Sport',
-                    'inne' => '📦 Inne'
-                ];
-                echo $categoryNames[$produkt['kategoria']] ?? '📦 Inne';
-                ?>
+                <?php echo getCategoryIcon($produkt['kategoria']); ?> 
+                <?php echo getCategoryName($produkt['kategoria']); ?>
             </span>
             
             <h1 class="product-title"><?= htmlspecialchars($produkt['nazwa']) ?></h1>
@@ -408,19 +551,19 @@ body {
                 </div>
 
                 <div class="action-buttons">
-                    <?php if (!empty($_SESSION['user_id']) && $_SESSION['user_id'] != $produkt['sprzedawca_id']): ?>
+                    <?php if ($logged_in && $current_user_id != $produkt['sprzedawca_id']): ?>
                         <a href="czat.php?produkt_id=<?= $produkt['id'] ?>&user_id=<?= $produkt['sprzedawca_id'] ?>" class="btn btn-primary">
                             💬 Napisz do sprzedawcy
                         </a>
                         <a href="profil.php?id=<?= $produkt['sprzedawca_id'] ?>" class="btn btn-secondary">
                             👤 Zobacz profil
                         </a>
-                    <?php elseif ($_SESSION['user_id'] == $produkt['sprzedawca_id']): ?>
+                    <?php elseif ($logged_in && $current_user_id == $produkt['sprzedawca_id']): ?>
                         <a href="profil.php?id=<?= $produkt['sprzedawca_id'] ?>" class="btn btn-primary">
                             ⚙️ Zarządzaj produktem
                         </a>
                     <?php else: ?>
-                        <a href="login.php" class="btn btn-primary">
+                        <a href="logowanie.php" class="btn btn-primary">
                             🔑 Zaloguj się, aby napisać
                         </a>
                         <a href="profil.php?id=<?= $produkt['sprzedawca_id'] ?>" class="btn btn-secondary">

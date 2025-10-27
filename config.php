@@ -23,7 +23,7 @@ function h($str) {
 // Funkcja sprawdzająca zalogowanie
 function requireLogin() {
     if (empty($_SESSION['user_id'])) {
-        header("Location: login.php");
+        header("Location: logowanie.php");
         exit;
     }
 }
@@ -84,6 +84,7 @@ define('ALLOWED_IMAGE_TYPES', ['jpg', 'jpeg', 'png', 'gif', 'webp']);
 define('MAX_PRODUCT_PRICE', 10000);
 define('MAX_DESCRIPTION_LENGTH', 1000);
 define('MAX_MESSAGE_LENGTH', 1000);
+define('MAX_PRODUCTS_PER_DAY', 5); // Nowy limit
 define('UPLOAD_DIR', __DIR__ . '/uploads/');
 define('PROFILE_UPLOAD_DIR', __DIR__ . '/uploads/profiles/');
 
@@ -140,5 +141,61 @@ function getFlashMessage() {
         return $flash;
     }
     return null;
+}
+
+// NOWE FUNKCJE - Filtrowanie wulgaryzmów
+function filterProfanity($text) {
+    $profanity = [
+        'kurwa', 'kurde', 'chuj', 'huj', 'kutas', 'jebać', 'jebac', 'pierdol', 
+        'pierdolić', 'pierdolic', 'szmata', 'dziwka', 'skurwysyn', 'skurwiel',
+        'zajebisty', 'wpierdol', 'wypierdalaj', 'spierdalaj', 'gówno', 'gowno',
+        'srać', 'srac', 'dupa', 'dupek', 'cipka', 'pizda', 'fiut',
+        'fuck', 'shit', 'bitch', 'ass', 'dick', 'pussy', 'cunt', 'cock',
+        'damn', 'bastard', 'whore', 'slut', 'nazi', 'hitler', 'nigger', 'spierdalaj', 'japierodle','kutas'
+    ];
+    
+    $text_lower = mb_strtolower($text, 'UTF-8');
+    
+    foreach ($profanity as $word) {
+        if (mb_strpos($text_lower, $word) !== false) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Sprawdź czy użytkownik może dodać ogłoszenie (max 5 dziennie)
+function canAddProduct($user_id, $conn) {
+    $today = date('Y-m-d');
+    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM produkty WHERE id_sprzedawcy = ? AND DATE(data_dodania) = ?");
+    $stmt->bind_param("is", $user_id, $today);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    
+    return $result['count'] < MAX_PRODUCTS_PER_DAY;
+}
+
+// Pobierz liczbę ogłoszeń użytkownika dzisiaj
+function getTodayProductCount($user_id, $conn) {
+    $today = date('Y-m-d');
+    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM produkty WHERE id_sprzedawcy = ? AND DATE(data_dodania) = ?");
+    $stmt->bind_param("is", $user_id, $today);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    
+    return $result['count'];
+}
+
+// Pobierz liczbę nieprzeczytanych wiadomości
+function getUnreadCount($user_id, $conn) {
+    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM chats WHERE user_to = ? AND read_status = 0");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $result['count'];
 }
 ?>

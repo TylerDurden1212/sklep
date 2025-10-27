@@ -8,6 +8,13 @@ $conn = getDBConnection();
 $msg = "";
 $msgType = "";
 
+// Pobierz liczbę dzisiejszych ogłoszeń
+$todayCount = getTodayProductCount($_SESSION['user_id'], $conn);
+$remainingToday = MAX_PRODUCTS_PER_DAY - $todayCount;
+
+// Pobierz nieprzeczytane wiadomości
+$unread_count = getUnreadCount($_SESSION['user_id'], $conn);
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $nazwa = trim($_POST["nazwa"] ?? '');
     $opis = trim($_POST["opis"] ?? '');
@@ -17,6 +24,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // Walidacja
     if (empty($nazwa) || empty($opis) || $cena <= 0) {
         $msg = "Wszystkie pola muszą być wypełnione poprawnie.";
+        $msgType = "error";
+    } elseif (!canAddProduct($_SESSION['user_id'], $conn)) {
+        $msg = "Osiągnąłeś dzienny limit " . MAX_PRODUCTS_PER_DAY . " ogłoszeń. Spróbuj ponownie jutro.";
+        $msgType = "error";
+    } elseif (!filterProfanity($nazwa)) {
+        $msg = "Nazwa produktu zawiera niedozwolone słowa.";
+        $msgType = "error";
+    } elseif (!filterProfanity($opis)) {
+        $msg = "Opis produktu zawiera niedozwolone słowa.";
         $msgType = "error";
     } elseif (strlen($opis) > MAX_DESCRIPTION_LENGTH) {
         $msg = "Opis nie może mieć więcej niż " . MAX_DESCRIPTION_LENGTH . " znaków.";
@@ -65,26 +81,133 @@ $conn->close();
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dodaj produkt - Sklep</title>
+<title>➕ Dodaj produkt - Sklep Online</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛍️</text></svg>">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
+
+:root {
+    --primary: #667eea;
+    --secondary: #764ba2;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --dark: #1f2937;
+    --light: #f8f9fa;
 }
 
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    min-height: 100vh;
+}
+
+/* Header */
+.header {
+    background: white;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    animation: slideDown 0.5s;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+.header-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 25px;
+    align-items: center;
+}
+
+.logo {
+    font-size: 32px;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    cursor: pointer;
+    transition: 0.3s;
+    letter-spacing: -1px;
+}
+
+.logo:hover {
+    transform: scale(1.05);
+}
+
+.header-title {
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--dark);
+}
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.menu-item {
+    text-decoration: none;
+    color: var(--dark);
+    padding: 10px 18px;
+    border-radius: 25px;
+    background: var(--light);
+    transition: 0.3s;
+    font-weight: 600;
+    font-size: 14px;
+    position: relative;
+    white-space: nowrap;
+}
+
+.menu-item:hover {
+    background: var(--primary);
+    color: white;
+    transform: translateY(-2px);
+}
+
+.badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: var(--danger);
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* Main Content */
 .container {
+    max-width: 800px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+.form-card {
     background: white;
     padding: 50px;
     border-radius: 25px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    max-width: 700px;
-    width: 100%;
     animation: slideUp 0.5s;
 }
 
@@ -99,14 +222,14 @@ body {
     }
 }
 
-.header {
+.form-header {
     text-align: center;
-    margin-bottom: 40px;
+    margin-bottom: 30px;
 }
 
-.header h2 {
-    font-size: 36px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.form-header h2 {
+    font-size: 32px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 10px;
@@ -117,8 +240,39 @@ body {
     font-size: 15px;
 }
 
+.limit-info {
+    background: <?= $remainingToday > 0 ? '#e0f2fe' : '#fee2e2' ?>;
+    padding: 15px 20px;
+    border-radius: 15px;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-left: 4px solid <?= $remainingToday > 0 ? '#0ea5e9' : 'var(--danger)' ?>;
+}
+
+.limit-info-icon {
+    font-size: 28px;
+}
+
+.limit-info-text {
+    flex: 1;
+}
+
+.limit-info-text strong {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 3px;
+    color: <?= $remainingToday > 0 ? '#0369a1' : '#991b1b' ?>;
+}
+
+.limit-info-text small {
+    color: #666;
+    font-size: 13px;
+}
+
 .user-info {
-    background: #f8f9fa;
+    background: var(--light);
     padding: 15px 20px;
     border-radius: 15px;
     margin-bottom: 30px;
@@ -131,7 +285,7 @@ body {
     width: 45px;
     height: 45px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
     display: flex;
     align-items: center;
@@ -147,17 +301,6 @@ body {
     text-align: center;
     font-weight: 500;
     animation: slideDown 0.3s;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 .alert-success {
@@ -185,7 +328,7 @@ label {
 }
 
 .required {
-    color: #ef4444;
+    color: var(--danger);
 }
 
 input[type=text], textarea, input[type=number], select {
@@ -200,7 +343,7 @@ input[type=text], textarea, input[type=number], select {
 
 input:focus, textarea:focus, select:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
@@ -218,11 +361,11 @@ textarea {
 }
 
 .char-count.warning {
-    color: #f59e0b;
+    color: var(--warning);
 }
 
 .char-count.danger {
-    color: #ef4444;
+    color: var(--danger);
     font-weight: bold;
 }
 
@@ -238,7 +381,7 @@ textarea {
 .file-label {
     display: block;
     padding: 40px 20px;
-    background: #f8f9fa;
+    background: var(--light);
     border: 3px dashed #ccc;
     border-radius: 15px;
     text-align: center;
@@ -247,12 +390,12 @@ textarea {
 }
 
 .file-label:hover {
-    border-color: #667eea;
+    border-color: var(--primary);
     background: #f0f0ff;
 }
 
 .file-label.has-file {
-    border-color: #10b981;
+    border-color: var(--success);
     background: #ecfdf5;
 }
 
@@ -269,7 +412,7 @@ textarea {
 .file-name {
     margin-top: 12px;
     font-size: 14px;
-    color: #10b981;
+    color: var(--success);
     font-weight: 600;
 }
 
@@ -293,7 +436,7 @@ textarea {
 button {
     width: 100%;
     padding: 16px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
     border: none;
     border-radius: 15px;
@@ -304,39 +447,23 @@ button {
     margin-top: 10px;
 }
 
-button:hover {
+button:hover:not(:disabled) {
     transform: translateY(-3px);
     box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 button:active {
     transform: translateY(0);
 }
 
-.links {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    margin-top: 25px;
-    flex-wrap: wrap;
-}
-
-.links a {
-    color: #667eea;
-    text-decoration: none;
-    font-weight: 600;
-    padding: 8px 16px;
-    border-radius: 20px;
-    transition: 0.3s;
-}
-
-.links a:hover {
-    background: #f0f0ff;
-}
-
 .info-box {
     background: #fff9e6;
-    border-left: 4px solid #f59e0b;
+    border-left: 4px solid var(--warning);
     padding: 15px 20px;
     border-radius: 10px;
     margin-bottom: 25px;
@@ -346,97 +473,146 @@ button:active {
 }
 
 @media (max-width: 768px) {
-    .container {
+    .header-content {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .header-title {
+        order: 2;
+    }
+    
+    .user-menu {
+        order: 3;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .form-card {
         padding: 30px 20px;
     }
     
-    .header h2 {
-        font-size: 28px;
+    .form-header h2 {
+        font-size: 24px;
     }
 }
 </style>
 </head>
 <body>
 
+<div class="header">
+    <div class="header-content">
+        <div class="logo" onclick="window.location='index.php'">🛍️ SKLEP</div>
+        
+        <div class="header-title">➕ Dodaj nowe ogłoszenie</div>
+
+        <div class="user-menu">
+            <a href="index.php" class="menu-item">🏠 Strona główna</a>
+            <a href="wiadomosci.php" class="menu-item">
+                💬 Wiadomości
+                <?php if ($unread_count > 0): ?>
+                    <span class="badge"><?= $unread_count ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="profil.php" class="menu-item">👤 Profil</a>
+            <a href="logout.php" class="menu-item">Wyloguj</a>
+        </div>
+    </div>
+</div>
+
 <div class="container">
-    <div class="header">
-        <h2>➕ Dodaj nowy produkt</h2>
-        <div class="subtitle">Wypełnij formularz, aby dodać ogłoszenie</div>
-    </div>
-
-    <div class="user-info">
-        <div class="user-icon"><?= strtoupper(substr($_SESSION['username'], 0, 1)) ?></div>
-        <div>
-            <div style="font-weight:600;">Zalogowany jako:</div>
-            <div style="color:#666;font-size:14px;"><?= h($_SESSION['username']) ?></div>
-        </div>
-    </div>
-
-    <?php if ($msg): ?>
-        <div class="alert alert-<?= $msgType ?>">
-            <?= $msgType === 'success' ? '✅' : '⚠️' ?> <?= h($msg) ?>
-            <?php if ($msgType === 'success'): ?>
-                <div style="margin-top:10px;font-size:13px;">Przekierowuję do produktu...</div>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-
-    <div class="info-box">
-        <strong>💡 Wskazówki:</strong><br>
-        • Dodaj wyraźne zdjęcie produktu<br>
-        • Opisz szczegółowo stan i właściwości<br>
-        • Ustal uczciwą cenę
-    </div>
-
-    <form method="post" enctype="multipart/form-data" id="productForm">
-        <div class="form-group">
-            <label>Nazwa produktu <span class="required">*</span></label>
-            <input type="text" name="nazwa" maxlength="100" required placeholder="np. iPhone 13 Pro 256GB">
+    <div class="form-card">
+        <div class="form-header">
+            <h2>➕ Dodaj nowy produkt</h2>
+            <div class="subtitle">Wypełnij formularz, aby dodać ogłoszenie</div>
         </div>
 
-        <div class="form-group">
-            <label>Kategoria <span class="required">*</span></label>
-            <select name="kategoria" required>
-                <option value="elektronika">📱 Elektronika</option>
-                <option value="odziez">👕 Odzież</option>
-                <option value="dom">🏠 Dom i Ogród</option>
-                <option value="sport">⚽ Sport</option>
-                <option value="inne" selected>📦 Inne</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label>Opis <span class="required">*</span></label>
-            <textarea name="opis" maxlength="<?= MAX_DESCRIPTION_LENGTH ?>" id="opisField" required placeholder="Opisz swój produkt jak najdokładniej..."></textarea>
-            <div class="char-count" id="charCount">0 / <?= MAX_DESCRIPTION_LENGTH ?></div>
-        </div>
-
-        <div class="form-group">
-            <label>Cena (max <?= number_format(MAX_PRODUCT_PRICE, 2) ?> zł) <span class="required">*</span></label>
-            <input type="number" step="0.01" name="cena" min="0.01" max="<?= MAX_PRODUCT_PRICE ?>" required placeholder="0.00">
-        </div>
-
-        <div class="form-group">
-            <label>Zdjęcie produktu</label>
-            <div class="file-upload">
-                <input type="file" name="zdjecie" accept="image/*" id="fileInput" class="file-input">
-                <label for="fileInput" class="file-label" id="fileLabel">
-                    <div class="file-icon">📷</div>
-                    <div class="file-text">Kliknij lub przeciągnij zdjęcie tutaj</div>
-                    <div class="file-name" id="fileName"></div>
-                </label>
-            </div>
-            <div class="preview-container" id="previewContainer">
-                <img id="imagePreview" class="preview-image" alt="Podgląd">
+        <div class="limit-info">
+            <div class="limit-info-icon"><?= $remainingToday > 0 ? '📊' : '⛔' ?></div>
+            <div class="limit-info-text">
+                <strong>Dzienny limit ogłoszeń: <?= $todayCount ?>/<?= MAX_PRODUCTS_PER_DAY ?></strong>
+                <small>
+                    <?php if ($remainingToday > 0): ?>
+                        Możesz dodać jeszcze <?= $remainingToday ?> <?= $remainingToday == 1 ? 'ogłoszenie' : 'ogłoszenia' ?> dzisiaj
+                    <?php else: ?>
+                        Osiągnąłeś dzienny limit. Spróbuj ponownie jutro.
+                    <?php endif; ?>
+                </small>
             </div>
         </div>
 
-        <button type="submit">📤 Dodaj produkt</button>
-    </form>
+        <div class="user-info">
+            <div class="user-icon"><?= strtoupper(substr($_SESSION['username'], 0, 1)) ?></div>
+            <div>
+                <div style="font-weight:600;">Zalogowany jako:</div>
+                <div style="color:#666;font-size:14px;"><?= h($_SESSION['username']) ?></div>
+            </div>
+        </div>
 
-    <div class="links">
-        <a href="index.php">← Powrót do sklepu</a>
-        <a href="profil.php">👤 Mój profil</a>
+        <?php if ($msg): ?>
+            <div class="alert alert-<?= $msgType ?>">
+                <?= $msgType === 'success' ? '✅' : '⚠️' ?> <?= h($msg) ?>
+                <?php if ($msgType === 'success'): ?>
+                    <div style="margin-top:10px;font-size:13px;">Przekierowuję do produktu...</div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="info-box">
+            <strong>💡 Wskazówki:</strong><br>
+            • Dodaj wyraźne zdjęcie produktu<br>
+            • Opisz szczegółowo stan i właściwości<br>
+            • Ustal uczciwą cenę<br>
+            • Nie używaj wulgaryzmów i nieodpowiednich słów
+        </div>
+
+        <form method="post" enctype="multipart/form-data" id="productForm">
+            <div class="form-group">
+                <label>Nazwa produktu <span class="required">*</span></label>
+                <input type="text" name="nazwa" maxlength="100" required placeholder="np. iPhone 13 Pro 256GB" <?= $remainingToday == 0 ? 'disabled' : '' ?>>
+            </div>
+
+            <div class="form-group">
+                <label>Kategoria <span class="required">*</span></label>
+                <select name="kategoria" required <?= $remainingToday == 0 ? 'disabled' : '' ?>>
+                    <option value="elektronika">📱 Elektronika</option>
+                    <option value="odziez">👕 Odzież</option>
+                    <option value="dom">🏠 Dom i Ogród</option>
+                    <option value="sport">⚽ Sport</option>
+                    <option value="inne" selected>📦 Inne</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Opis <span class="required">*</span></label>
+                <textarea name="opis" maxlength="<?= MAX_DESCRIPTION_LENGTH ?>" id="opisField" required placeholder="Opisz swój produkt jak najdokładniej..." <?= $remainingToday == 0 ? 'disabled' : '' ?>></textarea>
+                <div class="char-count" id="charCount">0 / <?= MAX_DESCRIPTION_LENGTH ?></div>
+            </div>
+
+            <div class="form-group">
+                <label>Cena (max <?= number_format(MAX_PRODUCT_PRICE, 2) ?> zł) <span class="required">*</span></label>
+                <input type="number" step="0.01" name="cena" min="0.01" max="<?= MAX_PRODUCT_PRICE ?>" required placeholder="0.00" <?= $remainingToday == 0 ? 'disabled' : '' ?>>
+            </div>
+
+            <div class="form-group">
+                <label>Zdjęcie produktu</label>
+                <div class="file-upload">
+                    <input type="file" name="zdjecie" accept="image/*" id="fileInput" class="file-input" <?= $remainingToday == 0 ? 'disabled' : '' ?>>
+                    <label for="fileInput" class="file-label" id="fileLabel">
+                        <div class="file-icon">📷</div>
+                        <div class="file-text">Kliknij lub przeciągnij zdjęcie tutaj</div>
+                        <div class="file-name" id="fileName"></div>
+                    </label>
+                </div>
+                <div class="preview-container" id="previewContainer">
+                    <img id="imagePreview" class="preview-image" alt="Podgląd">
+                </div>
+            </div>
+
+            <button type="submit" <?= $remainingToday == 0 ? 'disabled' : '' ?>>
+                <?= $remainingToday > 0 ? '📤 Dodaj produkt' : '⛔ Osiągnięto limit dzienny' ?>
+            </button>
+        </form>
     </div>
 </div>
 
@@ -493,19 +669,19 @@ fileInput.addEventListener('change', function() {
 // Drag & Drop
 fileLabel.addEventListener('dragover', function(e) {
     e.preventDefault();
-    this.style.borderColor = '#667eea';
+    this.style.borderColor = 'var(--primary)';
     this.style.background = '#f0f0ff';
 });
 
 fileLabel.addEventListener('dragleave', function() {
     this.style.borderColor = '#ccc';
-    this.style.background = '#f8f9fa';
+    this.style.background = 'var(--light)';
 });
 
 fileLabel.addEventListener('drop', function(e) {
     e.preventDefault();
     this.style.borderColor = '#ccc';
-    this.style.background = '#f8f9fa';
+    this.style.background = 'var(--light)';
     
     const files = e.dataTransfer.files;
     if (files.length > 0) {

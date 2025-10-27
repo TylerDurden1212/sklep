@@ -36,12 +36,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if ($row = $res->fetch_assoc()) {
             if (password_verify($password, $row['password'])) {
-                // Zaloguj użytkownika
                 $_SESSION['user_id'] = (int)$row['id'];
                 $_SESSION['username'] = $row['username'];
                 $_SESSION['email'] = $row['email'];
                 
-                // Aktualizuj ostatnią aktywność
                 $updateStmt = $conn->prepare("UPDATE logi SET last_activity = NOW() WHERE id = ?");
                 $updateStmt->bind_param("i", $row['id']);
                 $updateStmt->execute();
@@ -64,12 +62,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Logowanie - Sklep Online</title>
+<title>Logowanie - GórkaSklep.pl</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏔️</text></svg>">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --primary: #ff8c42;
+    --secondary: #ff6b35;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
     min-height: 100vh;
     display: flex;
     justify-content: center;
@@ -101,7 +106,7 @@ body {
 }
 
 .left-side {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
     padding: 60px 40px;
     display: flex;
@@ -109,9 +114,25 @@ body {
     justify-content: center;
 }
 
-.left-side h1 {
-    font-size: 42px;
-    margin-bottom: 20px;
+.logo-section {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.logo-icon {
+    font-size: 80px;
+    margin-bottom: 15px;
+}
+
+.logo-text {
+    font-size: 36px;
+    font-weight: 900;
+    margin-bottom: 10px;
+}
+
+.logo-subtitle {
+    font-size: 16px;
+    opacity: 0.9;
 }
 
 .left-side .subtitle {
@@ -119,6 +140,7 @@ body {
     opacity: 0.9;
     line-height: 1.6;
     margin-bottom: 40px;
+    text-align: center;
 }
 
 .feature {
@@ -215,14 +237,14 @@ input[type=text], input[type=password] {
 
 input:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
 }
 
 button {
     width: 100%;
     padding: 16px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
     border: none;
     border-radius: 12px;
@@ -234,7 +256,7 @@ button {
 
 button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 10px 25px rgba(255, 140, 66, 0.4);
 }
 
 .divider {
@@ -255,13 +277,8 @@ button:hover {
     background: #e0e0e0;
 }
 
-.divider::before {
-    left: 0;
-}
-
-.divider::after {
-    right: 0;
-}
+.divider::before { left: 0; }
+.divider::after { right: 0; }
 
 .register-link {
     text-align: center;
@@ -269,7 +286,7 @@ button:hover {
 }
 
 .register-link a {
-    color: #667eea;
+    color: var(--primary);
     text-decoration: none;
     font-weight: 600;
     font-size: 15px;
@@ -291,7 +308,7 @@ button:hover {
 }
 
 .back-link a:hover {
-    color: #667eea;
+    color: var(--primary);
 }
 
 .password-toggle {
@@ -325,9 +342,136 @@ button:hover {
         padding: 40px 30px;
     }
     
-    .left-side h1 {
-        font-size: 32px;
+    .logo-text {
+        font-size: 28px;
     }
+    .header {
+    background: white;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    animation: slideDown 0.5s;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+.header-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 15px 20px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 25px;
+    align-items: center;
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.logo-section:hover {
+    transform: scale(1.02);
+}
+
+.logo-icon {
+    font-size: 48px;
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.logo-main {
+    font-size: 28px;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+    line-height: 1;
+}
+
+.logo-subtitle {
+    font-size: 11px;
+    color: #999;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.school-link {
+    font-size: 18px;
+    color: var(--primary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 2px;
+    transition: 0.3s;
+}
+
+.school-link:hover {
+    color: var(--secondary);
+    text-decoration: underline;
+}
+
+.search-section {
+    display: flex;
+    gap: 10px;
+}
+
+.search-bar {
+    flex: 1;
+    position: relative;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 14px 50px 14px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 30px;
+    font-size: 15px;
+    transition: 0.3s;
+}
+
+.search-bar input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
+}
+
+.search-btn {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+.search-btn:hover {
+    transform: translateY(-50%) scale(1.05);
+}
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 }
 </style>
 </head>
@@ -335,8 +479,12 @@ button:hover {
 
 <div class="login-container">
     <div class="left-side">
-        <h1>🛍️ Witaj ponownie!</h1>
-        <p class="subtitle">Zaloguj się, aby kontynuować kupowanie i sprzedawanie wspaniałych produktów.</p>
+        <div class="logo-section">
+            <div class="logo-icon"><img src = "./images/logo_strona.png" height = "100px" width = "100px"></div>
+            <div class="logo-text">GórkaSklep.pl</div>
+            <div class="logo-subtitle">Szkolny Sklep Internetowy</div>
+        </div>
+        <p class="subtitle">Zaloguj się, aby kontynuować kupowanie i sprzedawanie w naszej szkolnej społeczności.</p>
         
         <div class="feature">
             <div class="feature-icon">🚀</div>
@@ -355,10 +503,10 @@ button:hover {
         </div>
         
         <div class="feature">
-            <div class="feature-icon">🔒</div>
+            <div class="feature-icon">🏫</div>
             <div class="feature-text">
-                <h3>Bezpieczeństwo</h3>
-                <p>Twoje dane są chronione</p>
+                <h3>Szkolna społeczność</h3>
+                <p>Handluj ze swoimi kolegami z LO II Rabka-Zdrój</p>
             </div>
         </div>
     </div>
