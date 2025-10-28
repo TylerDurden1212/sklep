@@ -1,7 +1,7 @@
 <?php
 session_start();
 if (empty($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header("Location: logowanie.php");
     exit;
 }
 
@@ -48,7 +48,7 @@ if (!$produkt_id) {
                 justify-content: center;
                 align-items: center;
                 height: 100vh;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
                 color: white;
                 text-align: center;
                 padding: 20px;
@@ -65,7 +65,7 @@ if (!$produkt_id) {
                 display: inline-block;
                 margin-top: 20px;
                 padding: 12px 24px;
-                background: #667eea;
+                background: #ff8c42;
                 color: white;
                 text-decoration: none;
                 border-radius: 25px;
@@ -104,7 +104,6 @@ if (!$produkt) {
 
 // Ustal z kim rozmawiamy
 if ($other_user_id == 0) {
-    // Jeśli nie podano user_id, rozmawiamy ze sprzedawcą
     $to_id = $produkt['sprzedawca_id'];
 } else {
     $to_id = $other_user_id;
@@ -157,7 +156,6 @@ if (isset($_GET['fetch']) && $_GET['fetch'] == 1) {
     $messages = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
     
-    // Oznacz jako przeczytane
     $stmt = $conn->prepare("UPDATE chats SET read_status=1 WHERE produkt_id=? AND user_to=? AND user_from=?");
     $stmt->bind_param("iii", $produkt_id, $from_id, $to_id);
     $stmt->execute();
@@ -168,7 +166,7 @@ if (isset($_GET['fetch']) && $_GET['fetch'] == 1) {
     exit;
 }
 
-// Sprawdź czy użytkownik jest online (ostatnia aktywność < 5 min)
+// Sprawdź czy użytkownik jest online
 $stmt = $conn->prepare("SELECT last_activity FROM logi WHERE id = ?");
 $stmt->bind_param("i", $to_id);
 $stmt->execute();
@@ -178,7 +176,7 @@ $stmt->close();
 $is_online = false;
 if ($activity && isset($activity['last_activity'])) {
     $last_time = strtotime($activity['last_activity']);
-    $is_online = (time() - $last_time) < 300; // 5 minut
+    $is_online = (time() - $last_time) < 300;
 }
 
 // Aktualizuj swoją aktywność
@@ -186,6 +184,17 @@ $stmt = $conn->prepare("UPDATE logi SET last_activity = NOW() WHERE id = ?");
 $stmt->bind_param("i", $from_id);
 $stmt->execute();
 $stmt->close();
+
+// Pobierz nieprzeczytane wiadomości
+$unread_count = 0;
+$stmt = $conn->prepare("SELECT COUNT(*) as cnt FROM chats WHERE user_to=? AND read_status=0");
+$stmt->bind_param("i", $from_id);
+$stmt->execute();
+$unread_count = $stmt->get_result()->fetch_assoc()['cnt'];
+$stmt->close();
+
+// Placeholder dla wyszukiwania (używane w nagłówku)
+$search = '';
 ?>
 <!doctype html>
 <html lang="pl">
@@ -196,28 +205,228 @@ $stmt->close();
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --primary: #ff8c42;
+    --secondary: #ff6b35;
+    --accent: #ffa500;
+    --dark: #2c3e50;
+    --light: #fff5f0;
+    --white: #ffffff;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
     min-height: 100vh;
-    padding: 20px;
     overflow: hidden;
 }
 
+/* Header */
+.header {
+    background: white;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    animation: slideDown 0.5s;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+.header-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 15px 20px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 25px;
+    align-items: center;
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.logo-section:hover {
+    transform: scale(1.02);
+}
+
+.logo-icon {
+    font-size: 48px;
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.logo-main {
+    font-size: 28px;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+    line-height: 1;
+}
+
+.logo-subtitle {
+    font-size: 11px;
+    color: #999;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.school-link {
+    font-size: 18px;
+    color: var(--primary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 2px;
+    transition: 0.3s;
+}
+
+.school-link:hover {
+    color: var(--secondary);
+    text-decoration: underline;
+}
+
+.search-section {
+    display: flex;
+    gap: 10px;
+}
+
+.search-bar {
+    flex: 1;
+    position: relative;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 14px 50px 14px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 30px;
+    font-size: 15px;
+    transition: 0.3s;
+}
+
+.search-bar input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
+}
+
+.search-btn {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+.search-btn:hover {
+    transform: translateY(-50%) scale(1.05);
+}
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.menu-item {
+    text-decoration: none;
+    color: var(--dark);
+    padding: 10px 18px;
+    border-radius: 25px;
+    background: var(--light);
+    transition: 0.3s;
+    font-weight: 600;
+    font-size: 14px;
+    position: relative;
+    white-space: nowrap;
+}
+
+.menu-item:hover {
+    background: var(--primary);
+    color: white;
+    transform: translateY(-2px);
+}
+
+.menu-item.messages {
+    position: relative;
+}
+
+.badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #ef4444;
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.btn-add {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: 0.3s;
+    box-shadow: 0 4px 15px rgba(255, 140, 66, 0.3);
+}
+
+.btn-add:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(255, 140, 66, 0.5);
+}
+
+/* Chat Container */
 .container {
     max-width: 900px;
-    margin: 0 auto;
+    margin: 20px auto;
     background: white;
     border-radius: 20px;
     overflow: hidden;
     box-shadow: 0 10px 40px rgba(0,0,0,0.3);
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 40px);
+    height: calc(100vh - 160px);
 }
 
 .chat-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
     padding: 20px;
     display: flex;
@@ -273,11 +482,6 @@ body {
     background: #94a3b8;
 }
 
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
 .chat-subtitle {
     font-size: 14px;
     opacity: 0.9;
@@ -328,7 +532,7 @@ body {
 }
 
 .messages-container::-webkit-scrollbar-thumb {
-    background: #667eea;
+    background: var(--primary);
     border-radius: 4px;
 }
 
@@ -380,7 +584,7 @@ body {
 
 .message.from-me {
     align-self: flex-end;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
     border-bottom-right-radius: 4px;
 }
@@ -398,7 +602,7 @@ body {
     font-size: 12px;
     margin-bottom: 4px;
     opacity: 0.8;
-    color: #667eea;
+    color: var(--primary);
 }
 
 .message.from-me .message-sender {
@@ -487,8 +691,8 @@ body {
 
 .chat-input:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
 }
 
 .char-counter {
@@ -501,7 +705,7 @@ body {
 }
 
 .send-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
     border: none;
     padding: 12px 24px;
@@ -515,7 +719,7 @@ body {
 
 .send-btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 5px 20px rgba(255, 140, 66, 0.4);
 }
 
 .send-btn:disabled {
@@ -559,14 +763,14 @@ body {
     align-items: center;
     gap: 10px;
     z-index: 1000;
-    animation: slideDown 0.3s;
+    animation: slideDownStatus 0.3s;
 }
 
 .connection-status.show {
     display: flex;
 }
 
-@keyframes slideDown {
+@keyframes slideDownStatus {
     from {
         opacity: 0;
         transform: translateX(-50%) translateY(-20px);
@@ -578,13 +782,25 @@ body {
 }
 
 @media (max-width: 768px) {
-    body {
-        padding: 0;
+    .header-content {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .search-section {
+        order: 3;
+    }
+    
+    .user-menu {
+        order: 2;
+        justify-content: center;
+        flex-wrap: wrap;
     }
     
     .container {
-        height: 100vh;
-        border-radius: 0;
+        height: calc(100vh - 180px);
+        margin: 10px;
+        border-radius: 15px;
     }
     
     .message {
@@ -599,133 +815,6 @@ body {
     .send-btn {
         width: 100%;
     }
-    .header {
-    background: white;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    animation: slideDown 0.5s;
-}
-
-    @keyframes slideDown {
-        from { transform: translateY(-100%); }
-        to { transform: translateY(0); }
-    }
-
-    .header-content {
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 15px 20px;
-        display: grid;
-        grid-template-columns: auto 1fr auto;
-        gap: 25px;
-        align-items: center;
-    }
-
-    .logo-section {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        cursor: pointer;
-        transition: 0.3s;
-    }
-
-    .logo-section:hover {
-        transform: scale(1.02);
-    }
-
-    .logo-icon {
-        font-size: 48px;
-    }
-
-    .logo-text {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .logo-main {
-        font-size: 28px;
-        font-weight: 900;
-        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        letter-spacing: -0.5px;
-        line-height: 1;
-    }
-
-    .logo-subtitle {
-        font-size: 11px;
-        color: #999;
-        font-weight: 600;
-        margin-top: 2px;
-    }
-
-    .school-link {
-        font-size: 18px;
-        color: var(--primary);
-        text-decoration: none;
-        display: flex;
-        align-items: center;
-        gap: 3px;
-        margin-top: 2px;
-        transition: 0.3s;
-    }
-
-    .school-link:hover {
-        color: var(--secondary);
-        text-decoration: underline;
-    }
-
-    .search-section {
-        display: flex;
-        gap: 10px;
-    }
-
-    .search-bar {
-        flex: 1;
-        position: relative;
-    }
-
-    .search-bar input {
-        width: 100%;
-        padding: 14px 50px 14px 20px;
-        border: 2px solid #e0e0e0;
-        border-radius: 30px;
-        font-size: 15px;
-        transition: 0.3s;
-    }
-
-    .search-bar input:focus {
-        outline: none;
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
-    }
-
-    .search-btn {
-        position: absolute;
-        right: 5px;
-        top: 50%;
-        transform: translateY(-50%);
-        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-        border: none;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 25px;
-        cursor: pointer;
-        font-weight: bold;
-        transition: 0.3s;
-    }
-
-    .search-btn:hover {
-        transform: translateY(-50%) scale(1.05);
-    }
-
-    .user-menu {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
 }
 </style>
 </head>
@@ -735,15 +824,16 @@ body {
     <span>⚠️</span>
     <span>Utracono połączenie. Próba ponownego połączenia...</span>
 </div>
+
 <div class="header">
     <div class="header-content">
         <div class="logo-section" onclick="window.location='index.php'">
-            <div class="logo-icon"><img src = "./images/logo.png" height = "50px" width = "50px"></div>
+            <div class="logo-icon"><img src="./images/logo.png" height="50px" width="50px"></div>
             <div class="logo-text">
                 <div class="logo-main">GórkaSklep.pl</div>
                 <div class="logo-subtitle">Szkolny Sklep Internetowy</div>
                 <a href="https://lo2rabka.nowotarski.edu.pl" target="_blank" class="school-link" onclick="event.stopPropagation()">
-                     Przejdź na nasza stronę szkoły! 🏫
+                    Przejdź na naszą stronę szkoły! 🏫
                 </a>
             </div>
         </div>
@@ -759,22 +849,19 @@ body {
         </form>
 
         <div class="user-menu">
-            <?php if (!empty($_SESSION['user_id'])): ?>
-                <a href="wiadomosci.php" class="menu-item messages">
-                    💬 Wiadomości
-                    <?php if ($unread_count > 0): ?>
-                        <span class="badge"><?= $unread_count ?></span>
-                    <?php endif; ?>
-                </a>
-                <a href="profil.php" class="menu-item">👤 Profil</a>
-                <a href="dodaj_produkt.php" class="btn-add">+ Dodaj</a>
-                <a href="logout.php" class="menu-item">Wyloguj</a>
-            <?php else: ?>
-                <a href="logowanie.php" class="btn-add">🔑 Zaloguj się</a>
-            <?php endif; ?>
+            <a href="wiadomosci.php" class="menu-item messages">
+                💬 Wiadomości
+                <?php if ($unread_count > 0): ?>
+                    <span class="badge"><?= $unread_count ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="profil.php" class="menu-item">👤 Profil</a>
+            <a href="dodaj_produkt.php" class="btn-add">+ Dodaj</a>
+            <a href="logout.php" class="menu-item">Wyloguj</a>
         </div>
     </div>
 </div>
+
 <div class="container">
     <div class="chat-header">
         <button class="back-btn" onclick="window.location='wiadomosci.php'">
@@ -861,18 +948,13 @@ let lastMessageCount = 0;
 let isConnected = true;
 let typingTimeout;
 
-// Auto-resize textarea
 input.addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = (this.scrollHeight) + 'px';
     charCounter.textContent = this.value.length + '/1000';
     
-    // Pokaż wskaźnik pisania
     clearTimeout(typingTimeout);
-    // W prawdziwej aplikacji wysłałbyś tu event do serwera
-    typingTimeout = setTimeout(() => {
-        // Przestań pokazywać wskaźnik
-    }, 1000);
+    typingTimeout = setTimeout(() => {}, 1000);
 });
 
 async function fetchMessages() {
@@ -943,11 +1025,9 @@ async function fetchMessages() {
             }
             
             const div = document.createElement('div');
-            // NAPRAWIONE: Używam parseInt() i === dla pewności poprawnego porównania
             const isMyMessage = parseInt(m.user_from) === parseInt(fromId);
             div.className = 'message ' + (isMyMessage ? 'from-me' : 'from-other');
             
-            // Pokaż nazwę nadawcy tylko dla wiadomości od innych
             if (!isMyMessage) {
                 const sender = document.createElement('div');
                 sender.className = 'message-sender';
@@ -1017,7 +1097,6 @@ form.addEventListener('submit', async function(e) {
     }
 });
 
-// Enter wysyła, Shift+Enter nowa linia
 input.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -1027,16 +1106,13 @@ input.addEventListener('keydown', function(e) {
     }
 });
 
-// Początkowe pobranie i cykliczne odświeżanie
 fetchMessages();
 const refreshInterval = setInterval(fetchMessages, 2000);
 
-// Wyczyść interval przy opuszczeniu strony
 window.addEventListener('beforeunload', () => {
     clearInterval(refreshInterval);
 });
 
-// Focus na input po załadowaniu
 window.addEventListener('load', () => {
     input.focus();
 });

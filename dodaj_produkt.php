@@ -8,12 +8,10 @@ $conn = getDBConnection();
 $msg = "";
 $msgType = "";
 
-// Pobierz liczbę dzisiejszych ogłoszeń
 $todayCount = getTodayProductCount($_SESSION['user_id'], $conn);
 $remainingToday = MAX_PRODUCTS_PER_DAY - $todayCount;
-
-// Pobierz nieprzeczytane wiadomości
 $unread_count = getUnreadCount($_SESSION['user_id'], $conn);
+$search = '';
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $nazwa = trim($_POST["nazwa"] ?? '');
@@ -21,7 +19,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $cena = floatval($_POST["cena"] ?? 0);
     $kategoria = $_POST["kategoria"] ?? 'inne';
 
-    // Walidacja
     if (empty($nazwa) || empty($opis) || $cena <= 0) {
         $msg = "Wszystkie pola muszą być wypełnione poprawnie.";
         $msgType = "error";
@@ -43,7 +40,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } else {
         $zdjeciePath = null;
         
-        // Upload zdjęcia
         if (isset($_FILES["zdjecie"]) && $_FILES["zdjecie"]["error"] === UPLOAD_ERR_OK) {
             $uploadResult = uploadImage($_FILES["zdjecie"], 'product');
             if ($uploadResult['success']) {
@@ -63,8 +59,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $productId = $stmt->insert_id;
                 $msg = "Produkt został dodany pomyślnie!";
                 $msgType = "success";
-                
-                // Przekieruj po 2 sekundach
                 header("refresh:2;url=produkt.php?id=$productId");
             } else {
                 $msg = "Błąd podczas dodawania: " . $stmt->error;
@@ -81,19 +75,19 @@ $conn->close();
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>➕ Dodaj produkt - Sklep Online</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛍️</text></svg>">
+<title>➕ Dodaj produkt - GórkaSklep.pl</title>
+<link rel="icon" href="./images/logo_strona.png">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-    --primary: #667eea;
-    --secondary: #764ba2;
+    --primary: #ff8c42;
+    --secondary: #ff6b35;
     --success: #10b981;
     --danger: #ef4444;
     --warning: #f59e0b;
-    --dark: #1f2937;
-    --light: #f8f9fa;
+    --dark: #2c3e50;
+    --light: #fff5f0;
 }
 
 body {
@@ -120,33 +114,109 @@ body {
 .header-content {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 15px 20px;
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 25px;
     align-items: center;
 }
 
-.logo {
-    font-size: 32px;
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.logo-section:hover {
+    transform: scale(1.02);
+}
+
+.logo-icon {
+    font-size: 48px;
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.logo-main {
+    font-size: 28px;
     font-weight: 900;
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    cursor: pointer;
+    letter-spacing: -0.5px;
+    line-height: 1;
+}
+
+.logo-subtitle {
+    font-size: 11px;
+    color: #999;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.school-link {
+    font-size: 18px;
+    color: var(--primary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 2px;
     transition: 0.3s;
-    letter-spacing: -1px;
 }
 
-.logo:hover {
-    transform: scale(1.05);
+.school-link:hover {
+    color: var(--secondary);
+    text-decoration: underline;
 }
 
-.header-title {
-    text-align: center;
-    font-size: 24px;
+.search-section {
+    display: flex;
+    gap: 10px;
+}
+
+.search-bar {
+    flex: 1;
+    position: relative;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 14px 50px 14px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 30px;
+    font-size: 15px;
+    transition: 0.3s;
+}
+
+.search-bar input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
+}
+
+.search-btn {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
     font-weight: bold;
-    color: var(--dark);
+    transition: 0.3s;
+}
+
+.search-btn:hover {
+    transform: translateY(-50%) scale(1.05);
 }
 
 .user-menu {
@@ -194,6 +264,22 @@ body {
 @keyframes pulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.1); }
+}
+
+.btn-add {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: 0.3s;
+    box-shadow: 0 4px 15px rgba(255, 140, 66, 0.3);
+}
+
+.btn-add:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(255, 140, 66, 0.5);
 }
 
 /* Main Content */
@@ -344,7 +430,7 @@ input[type=text], textarea, input[type=number], select {
 input:focus, textarea:focus, select:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
 }
 
 textarea {
@@ -391,7 +477,7 @@ textarea {
 
 .file-label:hover {
     border-color: var(--primary);
-    background: #f0f0ff;
+    background: #ffe0cc;
 }
 
 .file-label.has-file {
@@ -449,7 +535,7 @@ button {
 
 button:hover:not(:disabled) {
     transform: translateY(-3px);
-    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 10px 25px rgba(255, 140, 66, 0.4);
 }
 
 button:disabled {
@@ -460,7 +546,24 @@ button:disabled {
 button:active {
     transform: translateY(0);
 }
+.search-btn {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.3s;
+}
 
+.search-btn:hover {
+    transform: translateY(-50%) scale(1.05);
+}
 .info-box {
     background: #fff9e6;
     border-left: 4px solid var(--warning);
@@ -478,12 +581,12 @@ button:active {
         gap: 15px;
     }
     
-    .header-title {
-        order: 2;
+    .search-section {
+        order: 3;
     }
     
     .user-menu {
-        order: 3;
+        order: 2;
         justify-content: center;
         flex-wrap: wrap;
     }
@@ -502,9 +605,26 @@ button:active {
 
 <div class="header">
     <div class="header-content">
-        <div class="logo" onclick="window.location='index.php'">🛍️ SKLEP</div>
+        <div class="logo-section" onclick="window.location='index.php'">
+            <div class="logo-icon"><img src="./images/logo.png" height="50px" width="50px"></div>
+            <div class="logo-text">
+                <div class="logo-main">GórkaSklep.pl</div>
+                <div class="logo-subtitle">Szkolny Sklep Internetowy</div>
+                <a href="https://lo2rabka.nowotarski.edu.pl" target="_blank" class="school-link" onclick="event.stopPropagation()">
+                    Przejdź na naszą stronę szkoły! 🏫
+                </a>
+            </div>
+        </div>
         
-        <div class="header-title">➕ Dodaj nowe ogłoszenie</div>
+        <form class="search-section" method="get" action="index.php">
+            <div class="search-bar">
+                <input type="text" 
+                       name="search" 
+                       placeholder="Czego szukasz? 🔍" 
+                       value="<?= htmlspecialchars($search) ?>">
+                <button type="submit" class="search-btn">Szukaj</button>
+            </div>
+        </form>
 
         <div class="user-menu">
             <a href="index.php" class="menu-item">🏠 Strona główna</a>

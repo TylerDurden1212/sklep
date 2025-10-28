@@ -151,7 +151,7 @@ function filterProfanity($text) {
         'zajebisty', 'wpierdol', 'wypierdalaj', 'spierdalaj', 'gówno', 'gowno',
         'srać', 'srac', 'dupa', 'dupek', 'cipka', 'pizda', 'fiut',
         'fuck', 'shit', 'bitch', 'ass', 'dick', 'pussy', 'cunt', 'cock',
-        'damn', 'bastard', 'whore', 'slut', 'nazi', 'hitler', 'nigger', 'spierdalaj', 'japierodle','kutas'
+        'damn', 'bastard', 'whore', 'slut', 'nazi', 'hitler', 'nigger', 'spierdalaj', 'japierodle','kutas', 'niger'
     ];
     
     $text_lower = mb_strtolower($text, 'UTF-8');
