@@ -4,29 +4,50 @@ require_once 'config.php';
 
 $conn = getDBConnection();
 
-$id = intval($_GET['id'] ?? 0);
+$productId = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
-$result = $conn->query("
-    SELECT p.*, l.username AS sprzedawca, l.id AS sprzedawca_id, l.profile_picture, l.bio
-    FROM produkty p
-    LEFT JOIN logi l ON p.id_sprzedawcy = l.id
-    WHERE p.id = $id
-");
-
-if ($result->num_rows === 0) {
-    die("Nie znaleziono produktu.");
+if ($productId <= 0) {
+    header("Location: index.php");
+    exit;
 }
 
-$produkt = $result->fetch_assoc();
+// Pobierz produkt
+$stmt = $conn->prepare("
+    SELECT p.*, l.username AS sprzedawca, l.id AS seller_id, l.profile_picture 
+    FROM produkty p 
+    LEFT JOIN logi l ON p.id_sprzedawcy = l.id 
+    WHERE p.id = ?
+");
+$stmt->bind_param("i", $productId);
+$stmt->execute();
+$result = $stmt->get_result();
+$product = $result->fetch_assoc();
+$stmt->close();
 
-// Sprawdź czy użytkownik zalogowany
-$logged_in = !empty($_SESSION['user_id']);
-$current_user_id = $_SESSION['user_id'] ?? null;
+if (!$product) {
+    header("Location: index.php");
+    exit;
+}
 
-// Pobierz nieprzeczytane wiadomości
+// Pobierz liczbę nieprzeczytanych wiadomości
 $unread_count = 0;
-if ($logged_in) {
-    $unread_count = getUnreadCount($current_user_id, $conn);
+if (!empty($_SESSION['user_id'])) {
+    $unread_count = getUnreadCount($_SESSION['user_id'], $conn);
+}
+
+$search = '';
+$isOwner = !empty($_SESSION['user_id']) && $_SESSION['user_id'] == $product['id_sprzedawcy'];
+
+// Dekoduj zdjęcia z JSON
+$zdjecia = [];
+if (!empty($product['zdjecie'])) {
+    $decoded = json_decode($product['zdjecie'], true);
+    if (is_array($decoded)) {
+        $zdjecia = $decoded;
+    } else {
+        // Stary format - pojedyncze zdjęcie
+        $zdjecia = [$product['zdjecie']];
+    }
 }
 
 $conn->close();
@@ -36,24 +57,25 @@ $conn->close();
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= htmlspecialchars($produkt['nazwa']) ?> - Sklep</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛍️</text></svg>">
+<title><?= htmlspecialchars($product['nazwa']) ?> - GórkaSklep.pl</title>
+<link rel="icon" href="./images/logo_strona.png">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-    --primary: #667eea;
-    --secondary: #764ba2;
+    --primary: #ff8c42;
+    --secondary: #ff6b35;
+    --accent: #ffa500;
+    --dark: #2c3e50;
+    --light: #fff5f0;
+    --white: #ffffff;
     --success: #10b981;
     --danger: #ef4444;
-    --warning: #f59e0b;
-    --dark: #1f2937;
-    --light: #f8f9fa;
 }
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    background: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
     min-height: 100vh;
 }
 
@@ -75,33 +97,109 @@ body {
 .header-content {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 15px 20px;
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 25px;
     align-items: center;
 }
 
-.logo {
-    font-size: 32px;
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.logo-section:hover {
+    transform: scale(1.02);
+}
+
+.logo-icon {
+    font-size: 48px;
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.logo-main {
+    font-size: 28px;
     font-weight: 900;
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    cursor: pointer;
+    letter-spacing: -0.5px;
+    line-height: 1;
+}
+
+.logo-subtitle {
+    font-size: 11px;
+    color: #999;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.school-link {
+    font-size: 18px;
+    color: var(--primary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 2px;
     transition: 0.3s;
-    letter-spacing: -1px;
 }
 
-.logo:hover {
-    transform: scale(1.05);
+.school-link:hover {
+    color: var(--secondary);
+    text-decoration: underline;
 }
 
-.header-title {
-    text-align: center;
-    font-size: 24px;
+.search-section {
+    display: flex;
+    gap: 10px;
+}
+
+.search-bar {
+    flex: 1;
+    position: relative;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 14px 50px 14px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 30px;
+    font-size: 15px;
+    transition: 0.3s;
+}
+
+.search-bar input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
+}
+
+.search-btn {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
     font-weight: bold;
-    color: var(--dark);
+    transition: 0.3s;
+}
+
+.search-btn:hover {
+    transform: translateY(-50%) scale(1.05);
 }
 
 .user-menu {
@@ -129,27 +227,11 @@ body {
     transform: translateY(-2px);
 }
 
-.btn-add {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-    color: white;
-    padding: 12px 24px;
-    border-radius: 25px;
-    text-decoration: none;
-    font-weight: bold;
-    transition: 0.3s;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-}
-
-.btn-add:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
-}
-
 .badge {
     position: absolute;
     top: -5px;
     right: -5px;
-    background: var(--danger);
+    background: #ef4444;
     color: white;
     border-radius: 50%;
     width: 22px;
@@ -167,21 +249,37 @@ body {
     50% { transform: scale(1.1); }
 }
 
-/* Main Content */
+.btn-add {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: 0.3s;
+    box-shadow: 0 4px 15px rgba(255, 140, 66, 0.3);
+}
+
+.btn-add:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(255, 140, 66, 0.5);
+}
+
+/* Main Container */
 .container {
     max-width: 1200px;
     margin: 30px auto;
     padding: 0 20px;
 }
 
-.product-container {
-    background: white;
-    border-radius: 25px;
-    overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+.product-wrapper {
     display: grid;
-    grid-template-columns: 1.2fr 1fr;
-    gap: 0;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    background: white;
+    padding: 40px;
+    border-radius: 25px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     animation: slideUp 0.5s;
 }
 
@@ -196,196 +294,333 @@ body {
     }
 }
 
-.product-image-section {
+/* Galeria zdjęć */
+.product-gallery {
     position: relative;
-    background: #f8f9fa;
 }
 
-.product-image {
+.main-image-container {
+    position: relative;
+    height: 500px;
+    border-radius: 20px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #f5f5f5;
+    transition: 0.3s;
+}
+
+.main-image-container:hover {
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.main-product-image {
     width: 100%;
-    height: 600px;
-    object-fit: cover;
+    height: 100%;
+    object-fit: contain;
+    transition: 0.3s;
 }
 
-.image-badge {
+.main-image-container:hover .main-product-image {
+    transform: scale(1.05);
+}
+
+.gallery-thumbnails {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    overflow-x: auto;
+    padding: 10px 0;
+}
+
+.gallery-thumbnails::-webkit-scrollbar {
+    height: 8px;
+}
+
+.gallery-thumbnails::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.gallery-thumbnails::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 10px;
+}
+
+.thumbnail {
+    width: 100px;
+    height: 100px;
+    border-radius: 10px;
+    object-fit: cover;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: 0.3s;
+    flex-shrink: 0;
+}
+
+.thumbnail:hover {
+    border-color: var(--primary);
+    transform: scale(1.05);
+}
+
+.thumbnail.active {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px white, 0 0 0 4px var(--primary);
+}
+
+.gallery-badge {
+    position: absolute;
+    bottom: 15px;
+    right: 15px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+    backdrop-filter: blur(10px);
+}
+
+/* Modal galerii */
+.gallery-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.95);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+
+.gallery-modal.active {
+    display: flex;
+}
+
+.modal-content {
+    position: relative;
+    max-width: 90%;
+    max-height: 90%;
+}
+
+.modal-image {
+    max-width: 100%;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 10px;
+}
+
+.modal-close {
     position: absolute;
     top: 20px;
-    left: 20px;
-    background: rgba(255,255,255,0.95);
-    padding: 10px 20px;
-    border-radius: 25px;
-    font-weight: bold;
-    color: var(--primary);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    right: 20px;
+    background: white;
+    border: none;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    font-size: 30px;
+    cursor: pointer;
+    z-index: 10001;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.product-details {
-    padding: 50px;
+.modal-close:hover {
+    background: var(--danger);
+    color: white;
+    transform: rotate(90deg);
+}
+
+.modal-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255,255,255,0.9);
+    border: none;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    font-size: 30px;
+    cursor: pointer;
+    transition: 0.3s;
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-nav:hover {
+    background: var(--primary);
+    color: white;
+    transform: translateY(-50%) scale(1.1);
+}
+
+.modal-nav.prev {
+    left: 20px;
+}
+
+.modal-nav.next {
+    right: 20px;
+}
+
+.modal-counter {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.9);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    z-index: 10001;
+}
+
+/* Product Info */
+.product-info {
     display: flex;
     flex-direction: column;
+    gap: 25px;
 }
 
-.product-category {
+.category-badge {
     display: inline-block;
-    background: #f0f0ff;
-    color: var(--primary);
     padding: 8px 16px;
+    background: var(--light);
+    color: var(--primary);
     border-radius: 20px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
-    margin-bottom: 15px;
+    width: fit-content;
 }
 
 .product-title {
     font-size: 36px;
-    color: #333;
-    margin-bottom: 20px;
-    line-height: 1.3;
+    color: var(--dark);
+    font-weight: 900;
+    line-height: 1.2;
 }
 
-.product-price {
-    font-size: 42px;
-    font-weight: bold;
+.price-section {
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    margin-bottom: 25px;
+    padding: 25px;
+    border-radius: 20px;
+    text-align: center;
 }
 
-.product-meta {
-    display: flex;
-    gap: 25px;
-    margin-bottom: 30px;
-    padding-bottom: 30px;
-    border-bottom: 2px solid #f0f0f0;
-}
-
-.meta-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    color: #666;
-}
-
-.meta-item strong {
-    color: #333;
-}
-
-.product-description {
+.price-label {
+    color: white;
     font-size: 16px;
+    margin-bottom: 10px;
+    opacity: 0.9;
+}
+
+.price {
+    font-size: 48px;
+    font-weight: 900;
+    color: white;
+}
+
+.description-section {
+    background: var(--light);
+    padding: 25px;
+    border-radius: 20px;
+}
+
+.section-title {
+    font-size: 20px;
+    color: var(--dark);
+    margin-bottom: 15px;
+    font-weight: 700;
+}
+
+.description-text {
     color: #666;
     line-height: 1.8;
-    margin-bottom: 35px;
-    flex: 1;
+    font-size: 15px;
     white-space: pre-wrap;
 }
 
 .seller-section {
-    border-top: 2px solid #f0f0f0;
-    padding-top: 30px;
-    margin-top: auto;
-}
-
-.seller-header {
-    font-size: 14px;
-    color: #999;
-    margin-bottom: 15px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.seller-card {
+    background: white;
+    border: 2px solid var(--light);
+    padding: 20px;
+    border-radius: 20px;
     display: flex;
     align-items: center;
-    gap: 20px;
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 15px;
-    margin-bottom: 20px;
+    gap: 15px;
     transition: 0.3s;
     cursor: pointer;
 }
 
-.seller-card:hover {
-    background: #f0f0f0;
-    transform: translateX(5px);
+.seller-section:hover {
+    border-color: var(--primary);
+    box-shadow: 0 5px 20px rgba(255, 140, 66, 0.2);
 }
 
 .seller-avatar {
-    width: 70px;
-    height: 70px;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
     object-fit: cover;
-    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+    border: 3px solid var(--primary);
 }
 
 .seller-avatar-placeholder {
-    width: 70px;
-    height: 70px;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 28px;
     font-weight: bold;
-    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+    font-size: 24px;
+    border: 3px solid var(--primary);
 }
 
-.seller-info {
-    flex: 1;
-}
-
-.seller-name {
-    font-size: 20px;
-    font-weight: bold;
-    color: #333;
+.seller-info h3 {
+    font-size: 18px;
+    color: var(--dark);
     margin-bottom: 5px;
 }
 
-.seller-bio {
-    font-size: 14px;
-    color: #666;
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+.seller-info p {
+    color: #999;
+    font-size: 13px;
 }
 
 .action-buttons {
     display: flex;
+    flex-direction: column;
     gap: 12px;
 }
 
 .btn {
-    flex: 1;
     padding: 16px 24px;
-    border: none;
     border-radius: 15px;
     font-size: 16px;
     font-weight: bold;
+    text-align: center;
+    text-decoration: none;
     cursor: pointer;
     transition: 0.3s;
-    text-decoration: none;
-    text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
+    border: none;
 }
 
 .btn-primary {
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
+    box-shadow: 0 5px 20px rgba(255, 140, 66, 0.3);
 }
 
 .btn-primary:hover {
     transform: translateY(-3px);
-    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 8px 30px rgba(255, 140, 66, 0.5);
 }
 
 .btn-secondary {
@@ -395,27 +630,27 @@ body {
 }
 
 .btn-secondary:hover {
-    background: #f0f0ff;
+    background: var(--primary);
+    color: white;
 }
 
-.additional-info {
-    background: #fff9e6;
-    padding: 20px;
-    border-radius: 15px;
-    margin-top: 20px;
-    border-left: 4px solid var(--warning);
+.btn-danger {
+    background: var(--danger);
+    color: white;
 }
 
-.additional-info h4 {
-    color: #f57c00;
-    margin-bottom: 10px;
-    font-size: 14px;
+.btn-danger:hover {
+    background: #dc2626;
+    transform: translateY(-3px);
 }
 
-.additional-info p {
+.meta-info {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 20px;
+    border-top: 2px solid var(--light);
+    color: #999;
     font-size: 13px;
-    color: #666;
-    line-height: 1.6;
 }
 
 @media (max-width: 968px) {
@@ -424,38 +659,32 @@ body {
         gap: 15px;
     }
     
-    .header-title {
-        order: 2;
+    .search-section {
+        order: 3;
     }
     
     .user-menu {
-        order: 3;
+        order: 2;
         justify-content: center;
         flex-wrap: wrap;
     }
     
-    .product-container {
+    .product-wrapper {
         grid-template-columns: 1fr;
-    }
-    
-    .product-image {
-        height: 400px;
-    }
-    
-    .product-details {
-        padding: 30px 25px;
+        padding: 25px;
+        gap: 30px;
     }
     
     .product-title {
         font-size: 28px;
     }
     
-    .product-price {
-        font-size: 32px;
+    .price {
+        font-size: 36px;
     }
     
-    .action-buttons {
-        flex-direction: column;
+    .main-image-container {
+        height: 350px;
     }
 }
 </style>
@@ -464,12 +693,29 @@ body {
 
 <div class="header">
     <div class="header-content">
-        <div class="logo" onclick="window.location='index.php'">🛍️ SKLEP</div>
+        <div class="logo-section" onclick="window.location='index.php'">
+            <div class="logo-icon"><img src="./images/logo.png" height="50px" width="50px"></div>
+            <div class="logo-text">
+                <div class="logo-main">GórkaSklep.pl</div>
+                <div class="logo-subtitle">Szkolny Sklep Internetowy</div>
+                <a href="https://lo2rabka.nowotarski.edu.pl" target="_blank" class="school-link" onclick="event.stopPropagation()">
+                    Przejdź na naszą stronę szkoły! 🏫
+                </a>
+            </div>
+        </div>
         
-        <div class="header-title">📦 Szczegóły produktu</div>
+        <form class="search-section" method="get" action="index.php">
+            <div class="search-bar">
+                <input type="text" 
+                       name="search" 
+                       placeholder="Czego szukasz? 🔍" 
+                       value="<?= htmlspecialchars($search) ?>">
+                <button type="submit" class="search-btn">Szukaj</button>
+            </div>
+        </form>
 
         <div class="user-menu">
-            <?php if ($logged_in): ?>
+            <?php if (!empty($_SESSION['user_id'])): ?>
                 <a href="index.php" class="menu-item">🏠 Strona główna</a>
                 <a href="wiadomosci.php" class="menu-item">
                     💬 Wiadomości
@@ -478,7 +724,6 @@ body {
                     <?php endif; ?>
                 </a>
                 <a href="profil.php" class="menu-item">👤 Profil</a>
-                <a href="dodaj_produkt.php" class="btn-add">+ Dodaj</a>
                 <a href="logout.php" class="menu-item">Wyloguj</a>
             <?php else: ?>
                 <a href="index.php" class="menu-item">🏠 Strona główna</a>
@@ -489,97 +734,209 @@ body {
 </div>
 
 <div class="container">
-    <div class="product-container">
-        <div class="product-image-section">
-            <?php if (!empty($produkt['zdjecie'])): ?>
-                <img src="<?= htmlspecialchars($produkt['zdjecie']) ?>" alt="<?= htmlspecialchars($produkt['nazwa']) ?>" class="product-image" onerror="this.src='https://via.placeholder.com/800x600?text=Brak+zdjęcia'">
+    <div class="product-wrapper">
+        <!-- Galeria zdjęć -->
+        <div class="product-gallery">
+            <?php if (!empty($zdjecia)): ?>
+                <div class="main-image-container" onclick="openGallery(0)">
+                    <img src="<?= htmlspecialchars($zdjecia[0]) ?>" 
+                         alt="<?= htmlspecialchars($product['nazwa']) ?>" 
+                         class="main-product-image" 
+                         id="mainImage"
+                         onerror="this.src='https://via.placeholder.com/500x500/ff8c42/ffffff?text=Brak+zdjęcia'">
+                    <?php if (count($zdjecia) > 1): ?>
+                        <div class="gallery-badge">📷 <?= count($zdjecia) ?> zdjęć</div>
+                    <?php endif; ?>
+                </div>
+                
+                <?php if (count($zdjecia) > 1): ?>
+                    <div class="gallery-thumbnails">
+                        <?php foreach ($zdjecia as $index => $zdjecie): ?>
+                            <img src="<?= htmlspecialchars($zdjecie) ?>" 
+                                 alt="Miniatura <?= $index + 1 ?>" 
+                                 class="thumbnail <?= $index === 0 ? 'active' : '' ?>"
+                                 onclick="changeMainImage(<?= $index ?>)"
+                                 onerror="this.src='https://via.placeholder.com/100/ff8c42/ffffff?text=?'">
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             <?php else: ?>
-                <img src="https://via.placeholder.com/800x600?text=Brak+zdjęcia" alt="Brak zdjęcia" class="product-image">
-            <?php endif; ?>
-            
-            <?php if (!empty($produkt['kategoria'])): ?>
-                <div class="image-badge">
-                    <?php echo getCategoryIcon($produkt['kategoria']); ?> 
-                    <?php echo ucfirst($produkt['kategoria']); ?>
+                <div class="main-image-container">
+                    <img src="https://via.placeholder.com/500x500/ff8c42/ffffff?text=Brak+zdjęcia" 
+                         alt="Brak zdjęcia" 
+                         class="main-product-image">
                 </div>
             <?php endif; ?>
         </div>
 
-        <div class="product-details">
-            <span class="product-category">
-                <?php echo getCategoryIcon($produkt['kategoria']); ?> 
-                <?php echo getCategoryName($produkt['kategoria']); ?>
-            </span>
-            
-            <h1 class="product-title"><?= htmlspecialchars($produkt['nazwa']) ?></h1>
-            
-            <div class="product-price"><?= number_format($produkt['cena'], 2) ?> zł</div>
-            
-            <div class="product-meta">
-                <div class="meta-item">
-                    📅 Dodano: <strong><?= date('d.m.Y', strtotime($produkt['data_dodania'])) ?></strong>
+        <!-- Informacje o produkcie -->
+        <div class="product-info">
+            <?php if (!empty($product['kategoria'])): ?>
+                <div class="category-badge">
+                    <?php
+                    $icons = [
+                        'elektronika' => '📱 Elektronika',
+                        'odziez' => '👕 Odzież',
+                        'dom' => '🏠 Dom i Ogród',
+                        'sport' => '⚽ Sport',
+                        'inne' => '📦 Inne'
+                    ];
+                    echo $icons[$product['kategoria']] ?? '📦 Inne';
+                    ?>
                 </div>
-                <div class="meta-item">
-                    👁️ ID: <strong>#<?= $produkt['id'] ?></strong>
-                </div>
-            </div>
-            
-            <div class="product-description">
-                <?= nl2br(htmlspecialchars($produkt['opis'])) ?>
+            <?php endif; ?>
+
+            <h1 class="product-title"><?= htmlspecialchars($product['nazwa']) ?></h1>
+
+            <div class="price-section">
+                <div class="price-label">Cena</div>
+                <div class="price"><?= number_format($product['cena'], 2) ?> zł</div>
             </div>
 
-            <div class="seller-section">
-                <div class="seller-header">👤 Sprzedawca</div>
-                
-                <div class="seller-card" onclick="window.location='profil.php?id=<?= $produkt['sprzedawca_id'] ?>'">
-                    <?php if (!empty($produkt['profile_picture'])): ?>
-                        <img src="<?= htmlspecialchars($produkt['profile_picture']) ?>" alt="Avatar" class="seller-avatar">
-                    <?php else: ?>
-                        <div class="seller-avatar-placeholder">
-                            <?= strtoupper(substr($produkt['sprzedawca'] ?? 'U', 0, 1)) ?>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <div class="seller-info">
-                        <div class="seller-name"><?= htmlspecialchars($produkt['sprzedawca'] ?? 'Nieznany') ?></div>
-                        <?php if (!empty($produkt['bio'])): ?>
-                            <div class="seller-bio"><?= htmlspecialchars($produkt['bio']) ?></div>
-                        <?php else: ?>
-                            <div class="seller-bio" style="color:#999;">Kliknij, aby zobaczyć profil</div>
-                        <?php endif; ?>
+            <div class="description-section">
+                <h2 class="section-title">📋 Opis produktu</h2>
+                <div class="description-text"><?= htmlspecialchars($product['opis']) ?></div>
+            </div>
+
+            <div class="seller-section" onclick="window.location='profil.php?id=<?= $product['seller_id'] ?>'">
+                <?php if (!empty($product['profile_picture'])): ?>
+                    <img src="<?= htmlspecialchars($product['profile_picture']) ?>" 
+                         alt="<?= htmlspecialchars($product['sprzedawca']) ?>" 
+                         class="seller-avatar"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="seller-avatar-placeholder" style="display:none;">
+                        <?= strtoupper(substr($product['sprzedawca'] ?? 'U', 0, 1)) ?>
                     </div>
+                <?php else: ?>
+                    <div class="seller-avatar-placeholder">
+                        <?= strtoupper(substr($product['sprzedawca'] ?? 'U', 0, 1)) ?>
+                    </div>
+                <?php endif; ?>
+                <div class="seller-info">
+                    <h3>👤 Sprzedawca</h3>
+                    <p><?= htmlspecialchars($product['sprzedawca'] ?? 'Nieznany') ?></p>
                 </div>
+            </div>
 
+            <?php if ($isOwner): ?>
                 <div class="action-buttons">
-                    <?php if ($logged_in && $current_user_id != $produkt['sprzedawca_id']): ?>
-                        <a href="czat.php?produkt_id=<?= $produkt['id'] ?>&user_id=<?= $produkt['sprzedawca_id'] ?>" class="btn btn-primary">
-                            💬 Napisz do sprzedawcy
-                        </a>
-                        <a href="profil.php?id=<?= $produkt['sprzedawca_id'] ?>" class="btn btn-secondary">
-                            👤 Zobacz profil
-                        </a>
-                    <?php elseif ($logged_in && $current_user_id == $produkt['sprzedawca_id']): ?>
-                        <a href="profil.php?id=<?= $produkt['sprzedawca_id'] ?>" class="btn btn-primary">
-                            ⚙️ Zarządzaj produktem
-                        </a>
-                    <?php else: ?>
-                        <a href="logowanie.php" class="btn btn-primary">
-                            🔑 Zaloguj się, aby napisać
-                        </a>
-                        <a href="profil.php?id=<?= $produkt['sprzedawca_id'] ?>" class="btn btn-secondary">
-                            👤 Zobacz profil
-                        </a>
-                    <?php endif; ?>
+                    <a href="edytuj_produkt.php?id=<?= $product['id'] ?>" class="btn btn-secondary">
+                        ✏️ Edytuj ogłoszenie
+                    </a>
+                    <a href="usun_produkt.php?id=<?= $product['id'] ?>" 
+                       class="btn btn-danger" 
+                       onclick="return confirm('Czy na pewno chcesz usunąć ten produkt?')">
+                        🗑️ Usuń ogłoszenie
+                    </a>
                 </div>
+            <?php elseif (!empty($_SESSION['user_id'])): ?>
+                <div class="action-buttons">
+                    <a href="czat.php?produkt_id=<?= $product['id'] ?>&user_id=<?= $product['seller_id'] ?>" 
+                       class="btn btn-primary">
+                        💬 Napisz do sprzedawcy
+                    </a>
+                </div>
+            <?php else: ?>
+                <div class="action-buttons">
+                    <a href="logowanie.php" class="btn btn-primary">
+                        🔑 Zaloguj się, aby napisać
+                    </a>
+                </div>
+            <?php endif; ?>
 
-                <div class="additional-info">
-                    <h4>⚠️ Bezpieczeństwo transakcji</h4>
-                    <p>Pamiętaj o weryfikacji produktu przed zakupem. Zawsze spotykaj się w bezpiecznym, publicznym miejscu. Nie przesyłaj pieniędzy z góry bez zobaczenia produktu.</p>
-                </div>
+            <div class="meta-info">
+                <span>📅 Dodano: <?= date('d.m.Y', strtotime($product['data_dodania'])) ?></span>
+                <span>🆔 ID: <?= $product['id'] ?></span>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Modal galerii -->
+<?php if (!empty($zdjecia)): ?>
+<div class="gallery-modal" id="galleryModal">
+    <button class="modal-close" onclick="closeGallery()">×</button>
+    <?php if (count($zdjecia) > 1): ?>
+        <button class="modal-nav prev" onclick="prevImage()">‹</button>
+        <button class="modal-nav next" onclick="nextImage()">›</button>
+    <?php endif; ?>
+    <div class="modal-content">
+        <img src="" alt="Galeria" class="modal-image" id="modalImage">
+    </div>
+    <div class="modal-counter" id="modalCounter">1 / <?= count($zdjecia) ?></div>
+</div>
+<?php endif; ?>
+
+<script>
+// Galeria zdjęć
+const zdjecia = <?= json_encode($zdjecia) ?>;
+let currentImageIndex = 0;
+
+function changeMainImage(index) {
+    currentImageIndex = index;
+    document.getElementById('mainImage').src = zdjecia[index];
+    
+    // Aktualizuj aktywną miniaturę
+    document.querySelectorAll('.thumbnail').forEach((thumb, i) => {
+        thumb.classList.toggle('active', i === index);
+    });
+}
+
+function openGallery(index) {
+    if (zdjecia.length === 0) return;
+    
+    currentImageIndex = index;
+    const modal = document.getElementById('galleryModal');
+    const modalImage = document.getElementById('modalImage');
+    
+    modalImage.src = zdjecia[index];
+    modal.classList.add('active');
+    updateCounter();
+    
+    // Zablokuj scrollowanie tła
+    document.body.style.overflow = 'hidden';
+}
+
+function closeGallery() {
+    const modal = document.getElementById('galleryModal');
+    modal.classList.remove('active');
+    document.body.style.overflow = 'auto';
+}
+
+function nextImage() {
+    currentImageIndex = (currentImageIndex + 1) % zdjecia.length;
+    document.getElementById('modalImage').src = zdjecia[currentImageIndex];
+    updateCounter();
+}
+
+function prevImage() {
+    currentImageIndex = (currentImageIndex - 1 + zdjecia.length) % zdjecia.length;
+    document.getElementById('modalImage').src = zdjecia[currentImageIndex];
+    updateCounter();
+}
+
+function updateCounter() {
+    document.getElementById('modalCounter').textContent = 
+        `${currentImageIndex + 1} / ${zdjecia.length}`;
+}
+
+// Zamykanie modala po kliknięciu poza obrazem
+document.getElementById('galleryModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeGallery();
+    }
+});
+
+// Obsługa klawiszy strzałek
+document.addEventListener('keydown', function(e) {
+    const modal = document.getElementById('galleryModal');
+    if (!modal || !modal.classList.contains('active')) return;
+    
+    if (e.key === 'ArrowLeft') prevImage();
+    if (e.key === 'ArrowRight') nextImage();
+    if (e.key === 'Escape') closeGallery();
+});
+</script>
 
 </body>
 </html>

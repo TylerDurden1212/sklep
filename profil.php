@@ -17,6 +17,15 @@ $profile_id = intval($_GET['id'] ?? $_SESSION['user_id']);
 
 $msg = '';
 $msgType = '';
+$search = '';
+
+// Pobierz nieprzeczytane wiadomości
+$unread_count = 0;
+$uid = $_SESSION['user_id'];
+$unread_res = $conn->query("SELECT COUNT(*) as cnt FROM chats WHERE user_to=$uid AND read_status=0");
+if ($unread_res) {
+    $unread_count = $unread_res->fetch_assoc()['cnt'];
+}
 
 // Aktualizacja profilu
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['user_id'] == $profile_id) {
@@ -38,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['user_id'] == $profile_id
             if (move_uploaded_file($_FILES['profile_picture']['tmp_name'], $target)) {
                 $profilePicturePath = "uploads/profiles/" . $fileName;
                 
-                // WAŻNE: Usuń stare zdjęcie z serwera
+                // Usuń stare zdjęcie z serwera
                 $stmt = $conn->prepare("SELECT profile_picture FROM logi WHERE id=?");
                 $stmt->bind_param("i", $profile_id);
                 $stmt->execute();
@@ -48,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['user_id'] == $profile_id
                 if ($oldPic && !empty($oldPic['profile_picture'])) {
                     $oldPath = __DIR__ . "/" . $oldPic['profile_picture'];
                     if (file_exists($oldPath)) {
-                        unlink($oldPath); // Usuń stary plik
+                        unlink($oldPath);
                     }
                 }
                 
@@ -80,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['user_id'] == $profile_id
 if (isset($_GET['delete']) && $_SESSION['user_id'] == $profile_id) {
     $delete_id = intval($_GET['delete']);
     
-    // WAŻNE: Pobierz ścieżkę zdjęcia przed usunięciem
+    // Pobierz ścieżkę zdjęcia przed usunięciem
     $stmt = $conn->prepare("SELECT zdjecie FROM produkty WHERE id=? AND id_sprzedawcy=?");
     $stmt->bind_param("ii", $delete_id, $profile_id);
     $stmt->execute();
@@ -94,11 +103,11 @@ if (isset($_GET['delete']) && $_SESSION['user_id'] == $profile_id) {
         $stmt->execute();
         $stmt->close();
         
-        // WAŻNE: Usuń zdjęcie z serwera (folder uploads)
+        // Usuń zdjęcie z serwera
         if (!empty($prodData['zdjecie'])) {
             $imgPath = __DIR__ . "/" . $prodData['zdjecie'];
             if (file_exists($imgPath)) {
-                unlink($imgPath); // Usuń plik ze serwera
+                unlink($imgPath);
             }
         }
         
@@ -129,7 +138,7 @@ $stmt->close();
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= htmlspecialchars($user['username']) ?> - Profil | GórkaSklep.pl</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏔️</text></svg>">
+<link rel="icon" href="./images/logo_strona.png">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -145,29 +154,199 @@ body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
     min-height: 100vh;
-    padding: 20px;
 }
 
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-.back-link {
-    display: inline-block;
+/* Header */
+.header {
     background: white;
-    padding: 10px 20px;
-    border-radius: 25px;
-    text-decoration: none;
-    color: var(--primary);
-    font-weight: bold;
-    margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    animation: slideDown 0.5s;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+.header-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 15px 20px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 25px;
+    align-items: center;
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: pointer;
     transition: 0.3s;
 }
 
-.back-link:hover {
+.logo-section:hover {
+    transform: scale(1.02);
+}
+
+.logo-icon {
+    font-size: 48px;
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.logo-main {
+    font-size: 28px;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+    line-height: 1;
+}
+
+.logo-subtitle {
+    font-size: 11px;
+    color: #999;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.school-link {
+    font-size: 18px;
+    color: var(--primary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 2px;
+    transition: 0.3s;
+}
+
+.school-link:hover {
+    color: var(--secondary);
+    text-decoration: underline;
+}
+
+.search-section {
+    display: flex;
+    gap: 10px;
+}
+
+.search-bar {
+    flex: 1;
+    position: relative;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 14px 50px 14px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 30px;
+    font-size: 15px;
+    transition: 0.3s;
+}
+
+.search-bar input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
+}
+
+.search-btn {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+.search-btn:hover {
+    transform: translateY(-50%) scale(1.05);
+}
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.menu-item {
+    text-decoration: none;
+    color: var(--dark);
+    padding: 10px 18px;
+    border-radius: 25px;
+    background: var(--light);
+    transition: 0.3s;
+    font-weight: 600;
+    font-size: 14px;
+    position: relative;
+    white-space: nowrap;
+}
+
+.menu-item:hover {
+    background: var(--primary);
+    color: white;
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(255,255,255,0.3);
+}
+
+.badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #ef4444;
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.btn-add {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: 0.3s;
+    box-shadow: 0 4px 15px rgba(255, 140, 66, 0.3);
+}
+
+.btn-add:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(255, 140, 66, 0.5);
+}
+
+/* Main Content */
+.container {
+    max-width: 1200px;
+    margin: 30px auto;
+    padding: 0 20px;
 }
 
 .profile-header {
@@ -176,6 +355,18 @@ body {
     padding: 40px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.2);
     margin-bottom: 30px;
+    animation: slideUp 0.5s;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .profile-top {
@@ -504,7 +695,22 @@ body {
     margin-bottom: 10px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 968px) {
+    .header-content {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .search-section {
+        order: 3;
+    }
+    
+    .user-menu {
+        order: 2;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
     .profile-top {
         flex-direction: column;
         align-items: center;
@@ -520,141 +726,51 @@ body {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 15px;
     }
-    .header {
-    background: white;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    animation: slideDown 0.5s;
-}
-
-@keyframes slideDown {
-    from { transform: translateY(-100%); }
-    to { transform: translateY(0); }
-}
-
-.header-content {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 15px 20px;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 25px;
-    align-items: center;
-}
-
-.logo-section {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    cursor: pointer;
-    transition: 0.3s;
-}
-
-.logo-section:hover {
-    transform: scale(1.02);
-}
-
-.logo-icon {
-    font-size: 48px;
-}
-
-.logo-text {
-    display: flex;
-    flex-direction: column;
-}
-
-.logo-main {
-    font-size: 28px;
-    font-weight: 900;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    letter-spacing: -0.5px;
-    line-height: 1;
-}
-
-.logo-subtitle {
-    font-size: 11px;
-    color: #999;
-    font-weight: 600;
-    margin-top: 2px;
-}
-
-.school-link {
-    font-size: 18px;
-    color: var(--primary);
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    margin-top: 2px;
-    transition: 0.3s;
-}
-
-.school-link:hover {
-    color: var(--secondary);
-    text-decoration: underline;
-}
-
-.search-section {
-    display: flex;
-    gap: 10px;
-}
-
-.search-bar {
-    flex: 1;
-    position: relative;
-}
-
-.search-bar input {
-    width: 100%;
-    padding: 14px 50px 14px 20px;
-    border: 2px solid #e0e0e0;
-    border-radius: 30px;
-    font-size: 15px;
-    transition: 0.3s;
-}
-
-.search-bar input:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
-}
-
-.search-btn {
-    position: absolute;
-    right: 5px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-    border: none;
-    color: white;
-    padding: 10px 20px;
-    border-radius: 25px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: 0.3s;
-}
-
-.search-btn:hover {
-    transform: translateY(-50%) scale(1.05);
-}
-
-.user-menu {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
 }
 </style>
 </head>
 <body>
 
-<div class="container">
-    <a href="index.php" class="back-link">← Powrót do sklepu</a>
+<div class="header">
+    <div class="header-content">
+        <div class="logo-section" onclick="window.location='index.php'">
+            <div class="logo-icon"><img src="./images/logo.png" height="50px" width="50px"></div>
+            <div class="logo-text">
+                <div class="logo-main">GórkaSklep.pl</div>
+                <div class="logo-subtitle">Szkolny Sklep Internetowy</div>
+                <a href="https://lo2rabka.nowotarski.edu.pl" target="_blank" class="school-link" onclick="event.stopPropagation()">
+                    Przejdź na naszą stronę szkoły! 🏫
+                </a>
+            </div>
+        </div>
+        
+        <form class="search-section" method="get" action="index.php">
+            <div class="search-bar">
+                <input type="text" 
+                       name="search" 
+                       placeholder="Czego szukasz? 🔍" 
+                       value="<?= htmlspecialchars($search) ?>">
+                <button type="submit" class="search-btn">Szukaj</button>
+            </div>
+        </form>
 
+        <div class="user-menu">
+            <a href="index.php" class="menu-item">🏠 Strona główna</a>
+            <a href="wiadomosci.php" class="menu-item">
+                💬 Wiadomości
+                <?php if ($unread_count > 0): ?>
+                    <span class="badge"><?= $unread_count ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="profil.php" class="menu-item">👤 Profil</a>
+            <a href="dodaj_produkt.php" class="btn-add">+ Dodaj</a>
+            <a href="logout.php" class="menu-item">Wyloguj</a>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    
     <div class="profile-header">
         <?php if ($msg): ?>
             <div class="alert alert-<?= $msgType ?>">

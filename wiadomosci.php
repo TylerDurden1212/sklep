@@ -1,7 +1,7 @@
 <?php
 session_start();
 if (empty($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header("Location: logowanie.php");
     exit;
 }
 
@@ -14,6 +14,14 @@ $conn = new mysqli($host, $user, $pass, $dbname);
 $conn->set_charset("utf8mb4");
 
 $user_id = $_SESSION['user_id'];
+$search = '';
+
+// Pobierz liczbę nieprzeczytanych wiadomości
+$unread_count = 0;
+$unread_res = $conn->query("SELECT COUNT(*) as cnt FROM chats WHERE user_to=$user_id AND read_status=0");
+if ($unread_res) {
+    $unread_count = $unread_res->fetch_assoc()['cnt'];
+}
 
 // Pobierz wszystkie unikalne konwersacje
 $query = "
@@ -98,226 +106,28 @@ usort($conversations_array, function($a, $b) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>💬 Wiadomości</title>
+<title>💬 Wiadomości - GórkaSklep.pl</title>
+<link rel="icon" href="./images/logo_strona.png">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --primary: #ff8c42;
+    --secondary: #ff6b35;
+    --accent: #ffa500;
+    --dark: #2c3e50;
+    --light: #fff5f0;
+    --white: #ffffff;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
     min-height: 100vh;
-    padding: 20px;
 }
 
+/* Header */
 .header {
-    max-width: 1000px;
-    margin: 0 auto 30px;
-    background: white;
-    padding: 25px 30px;
-    border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.header h1 {
-    font-size: 32px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.back-btn {
-    background: #667eea;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 25px;
-    text-decoration: none;
-    font-weight: bold;
-    transition: 0.3s;
-}
-
-.back-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-}
-
-.container {
-    max-width: 1000px;
-    margin: 0 auto;
-}
-
-.conversation-list {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.conversation-card {
-    background: white;
-    border-radius: 20px;
-    padding: 20px;
-    display: flex;
-    gap: 20px;
-    cursor: pointer;
-    transition: 0.3s;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    position: relative;
-    align-items: center;
-}
-
-.conversation-card:hover {
-    transform: translateX(5px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-}
-
-.conversation-card.unread {
-    border-left: 5px solid #667eea;
-}
-
-.product-image {
-    width: 90px;
-    height: 90px;
-    border-radius: 15px;
-    object-fit: cover;
-    background: #f0f0f0;
-    flex-shrink: 0;
-}
-
-.conversation-main {
-    flex: 1;
-    min-width: 0;
-}
-
-.conversation-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 10px;
-}
-
-.conversation-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.user-avatar {
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid white;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.user-avatar-placeholder {
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 18px;
-    border: 3px solid white;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.conversation-info h3 {
-    font-size: 18px;
-    color: #333;
-    margin-bottom: 3px;
-}
-
-.conversation-info .product-name {
-    font-size: 13px;
-    color: #999;
-}
-
-.timestamp {
-    font-size: 12px;
-    color: #999;
-    white-space: nowrap;
-}
-
-.last-message {
-    font-size: 14px;
-    color: #666;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.5;
-}
-
-.unread-badge {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    background: #ef4444;
-    color: white;
-    border-radius: 50%;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: bold;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-}
-
-.empty-state {
-    background: white;
-    border-radius: 20px;
-    padding: 80px 20px;
-    text-align: center;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-}
-
-.empty-state-icon {
-    font-size: 80px;
-    margin-bottom: 20px;
-}
-
-.empty-state h2 {
-    font-size: 28px;
-    color: #333;
-    margin-bottom: 15px;
-}
-
-.empty-state p {
-    color: #666;
-    font-size: 16px;
-    line-height: 1.6;
-}
-
-@media (max-width: 768px) {
-    .header {
-        flex-direction: column;
-        gap: 15px;
-        text-align: center;
-    }
-    
-    .conversation-card {
-        padding: 15px;
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .product-image {
-        width: 100%;
-        height: 150px;
-    }
-    .header {
     background: white;
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
     position: sticky;
@@ -444,17 +254,319 @@ body {
     align-items: center;
     gap: 12px;
 }
+
+.menu-item {
+    text-decoration: none;
+    color: var(--dark);
+    padding: 10px 18px;
+    border-radius: 25px;
+    background: var(--light);
+    transition: 0.3s;
+    font-weight: 600;
+    font-size: 14px;
+    position: relative;
+    white-space: nowrap;
+}
+
+.menu-item:hover {
+    background: var(--primary);
+    color: white;
+    transform: translateY(-2px);
+}
+
+.menu-item.messages {
+    position: relative;
+}
+
+.badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #ef4444;
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.btn-add {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: 0.3s;
+    box-shadow: 0 4px 15px rgba(255, 140, 66, 0.3);
+}
+
+.btn-add:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(255, 140, 66, 0.5);
+}
+
+/* Container */
+.container {
+    max-width: 1000px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+.page-title {
+    background: white;
+    padding: 30px;
+    border-radius: 20px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.page-title h1 {
+    font-size: 32px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 10px;
+}
+
+.page-title p {
+    color: #666;
+    font-size: 15px;
+}
+
+.conversation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.conversation-card {
+    background: white;
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    gap: 20px;
+    cursor: pointer;
+    transition: 0.3s;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    position: relative;
+    align-items: center;
+}
+
+.conversation-card:hover {
+    transform: translateX(5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.conversation-card.unread {
+    border-left: 5px solid var(--primary);
+}
+
+.product-image {
+    width: 90px;
+    height: 90px;
+    border-radius: 15px;
+    object-fit: cover;
+    background: #f0f0f0;
+    flex-shrink: 0;
+}
+
+.conversation-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.conversation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.conversation-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.user-avatar-placeholder {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 18px;
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.conversation-info h3 {
+    font-size: 18px;
+    color: #333;
+    margin-bottom: 3px;
+}
+
+.conversation-info .product-name {
+    font-size: 13px;
+    color: #999;
+}
+
+.timestamp {
+    font-size: 12px;
+    color: #999;
+    white-space: nowrap;
+}
+
+.last-message {
+    font-size: 14px;
+    color: #666;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.5;
+}
+
+.unread-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: #ef4444;
+    color: white;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+.empty-state {
+    background: white;
+    border-radius: 20px;
+    padding: 80px 20px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.empty-state-icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+}
+
+.empty-state h2 {
+    font-size: 28px;
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.empty-state p {
+    color: #666;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+    .header-content {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .search-section {
+        order: 3;
+    }
+    
+    .user-menu {
+        order: 2;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .conversation-card {
+        padding: 15px;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .product-image {
+        width: 100%;
+        height: 150px;
+    }
 }
 </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>💬 Twoje wiadomości</h1>
-    <a href="index.php" class="back-btn">← Powrót</a>
+    <div class="header-content">
+        <div class="logo-section" onclick="window.location='index.php'">
+            <div class="logo-icon"><img src="./images/logo.png" height="50px" width="50px"></div>
+            <div class="logo-text">
+                <div class="logo-main">GórkaSklep.pl</div>
+                <div class="logo-subtitle">Szkolny Sklep Internetowy</div>
+                <a href="https://lo2rabka.nowotarski.edu.pl" target="_blank" class="school-link" onclick="event.stopPropagation()">
+                    Przejdź na naszą stronę szkoły! 🏫
+                </a>
+            </div>
+        </div>
+        
+        <form class="search-section" method="get" action="index.php">
+            <div class="search-bar">
+                <input type="text" 
+                       name="search" 
+                       placeholder="Czego szukasz? 🔍" 
+                       value="<?= htmlspecialchars($search) ?>">
+                <button type="submit" class="search-btn">Szukaj</button>
+            </div>
+        </form>
+
+        <div class="user-menu">
+            <a href="index.php" class="menu-item">🏠 Strona główna</a>
+            <a href="wiadomosci.php" class="menu-item messages">
+                💬 Wiadomości
+                <?php if ($unread_count > 0): ?>
+                    <span class="badge"><?= $unread_count ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="profil.php" class="menu-item">👤 Profil</a>
+            <a href="logout.php" class="menu-item">Wyloguj</a>
+        </div>
+    </div>
 </div>
 
 <div class="container">
+    <div class="page-title">
+        <h1>💬 Twoje wiadomości</h1>
+        <p>Zarządzaj swoimi rozmowami z innymi użytkownikami</p>
+    </div>
+
     <div class="conversation-list">
         <?php if (count($conversations_array) > 0): ?>
             <?php foreach ($conversations_array as $conv): ?>

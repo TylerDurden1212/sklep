@@ -53,6 +53,22 @@ if (!empty($_SESSION['user_id'])) {
 // Statystyki
 $total_products = $result->num_rows;
 $total_users = $conn->query("SELECT COUNT(*) as cnt FROM logi")->fetch_assoc()['cnt'];
+
+// Funkcja do pobierania pierwszego zdjęcia
+function getFirstImage($zdjecie) {
+    if (empty($zdjecie)) {
+        return null;
+    }
+    
+    // Sprawdź czy to JSON (nowy format)
+    $decoded = json_decode($zdjecie, true);
+    if (is_array($decoded) && !empty($decoded)) {
+        return $decoded[0]; // Pierwsze zdjęcie z tablicy
+    }
+    
+    // Stary format - pojedyncze zdjęcie
+    return $zdjecie;
+}
 ?>
 <!doctype html>
 <html lang="pl">
@@ -570,7 +586,7 @@ body {
                 <div class="logo-main">GórkaSklep.pl</div>
                 <div class="logo-subtitle">Szkolny Sklep Internetowy</div>
                 <a href="https://lo2rabka.nowotarski.edu.pl" target="_blank" class="school-link" onclick="event.stopPropagation()">
-                     Przejdź na nasza stronę szkoły! 🏫
+                     Przejdź na naszą stronę szkoły! 🏫
                 </a>
             </div>
         </div>
@@ -651,11 +667,13 @@ body {
 
 <div class="container">
     <?php if ($result->num_rows > 0): ?>
-        <?php while ($row = $result->fetch_assoc()): ?>
+        <?php while ($row = $result->fetch_assoc()): 
+            $firstImage = getFirstImage($row['zdjecie']);
+        ?>
             <div class="card" onclick="window.location='produkt.php?id=<?= $row['id'] ?>'">
                 <div class="card-image-wrapper">
-                    <?php if (!empty($row['zdjecie'])): ?>
-                        <img src="<?= htmlspecialchars($row['zdjecie']) ?>" alt="<?= htmlspecialchars($row['nazwa']) ?>" class="card-image" onerror="this.src='https://via.placeholder.com/300x280/ff8c42/ffffff?text=Brak+zdjęcia'">
+                    <?php if ($firstImage): ?>
+                        <img src="<?= htmlspecialchars($firstImage) ?>" alt="<?= htmlspecialchars($row['nazwa']) ?>" class="card-image" onerror="this.src='https://via.placeholder.com/300x280/ff8c42/ffffff?text=Brak+zdjęcia'">
                     <?php else: ?>
                         <img src="https://via.placeholder.com/300x280/ff8c42/ffffff?text=Brak+zdjęcia" alt="" class="card-image">
                     <?php endif; ?>

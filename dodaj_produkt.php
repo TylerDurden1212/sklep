@@ -38,22 +38,50 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $msg = "Cena nie może przekraczać " . number_format(MAX_PRODUCT_PRICE, 2) . " zł.";
         $msgType = "error";
     } else {
-        $zdjeciePath = null;
+        $zdjeciaPaths = [];
+        $uploadError = false;
         
-        if (isset($_FILES["zdjecie"]) && $_FILES["zdjecie"]["error"] === UPLOAD_ERR_OK) {
-            $uploadResult = uploadImage($_FILES["zdjecie"], 'product');
-            if ($uploadResult['success']) {
-                $zdjeciePath = $uploadResult['path'];
-            } else {
-                $msg = $uploadResult['error'];
+        // Obsługa wielu zdjęć (max 5)
+        if (isset($_FILES["zdjecia"]) && is_array($_FILES["zdjecia"]["name"])) {
+            $fileCount = count($_FILES["zdjecia"]["name"]);
+            
+            if ($fileCount > 5) {
+                $msg = "Możesz dodać maksymalnie 5 zdjęć.";
                 $msgType = "error";
+                $uploadError = true;
+            } else {
+                for ($i = 0; $i < $fileCount; $i++) {
+                    if ($_FILES["zdjecia"]["error"][$i] === UPLOAD_ERR_OK) {
+                        // Przygotuj tablicę pliku w odpowiednim formacie dla funkcji uploadImage
+                        $fileArray = [
+                            'name' => $_FILES["zdjecia"]["name"][$i],
+                            'type' => $_FILES["zdjecia"]["type"][$i],
+                            'tmp_name' => $_FILES["zdjecia"]["tmp_name"][$i],
+                            'error' => $_FILES["zdjecia"]["error"][$i],
+                            'size' => $_FILES["zdjecia"]["size"][$i]
+                        ];
+                        
+                        $uploadResult = uploadImage($fileArray, 'product');
+                        if ($uploadResult['success']) {
+                            $zdjeciaPaths[] = $uploadResult['path'];
+                        } else {
+                            $msg = "Błąd przesyłania zdjęcia " . ($i + 1) . ": " . $uploadResult['error'];
+                            $msgType = "error";
+                            $uploadError = true;
+                            break;
+                        }
+                    }
+                }
             }
         }
 
-        if (empty($msg)) {
+        if (empty($msg) && !$uploadError) {
+            // Konwertuj tablicę ścieżek do JSON
+            $zdjeciaJson = !empty($zdjeciaPaths) ? json_encode($zdjeciaPaths) : null;
+            
             $stmt = $conn->prepare("INSERT INTO produkty (nazwa, opis, cena, zdjecie, id_sprzedawcy, kategoria, data_dodania) VALUES (?, ?, ?, ?, ?, ?, NOW())");
             $userId = $_SESSION['user_id'];
-            $stmt->bind_param("ssdsds", $nazwa, $opis, $cena, $zdjeciePath, $userId, $kategoria);
+            $stmt->bind_param("ssdsds", $nazwa, $opis, $cena, $zdjeciaJson, $userId, $kategoria);
             
             if ($stmt->execute()) {
                 $productId = $stmt->insert_id;
@@ -495,7 +523,7 @@ textarea {
     font-size: 14px;
 }
 
-.file-name {
+.file-count {
     margin-top: 12px;
     font-size: 14px;
     color: var(--success);
@@ -505,21 +533,51 @@ textarea {
 .preview-container {
     margin-top: 15px;
     display: none;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .preview-container.show {
-    display: block;
+    display: flex;
+}
+
+.preview-item {
+    position: relative;
+    width: calc(33.333% - 7px);
+    height: 150px;
 }
 
 .preview-image {
     width: 100%;
-    max-height: 300px;
+    height: 100%;
     object-fit: cover;
     border-radius: 12px;
     box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
-button {
+.remove-image {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.3s;
+}
+
+.remove-image:hover {
+    transform: scale(1.1);
+}
+
+button[type="submit"] {
     width: 100%;
     padding: 16px;
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
@@ -533,37 +591,16 @@ button {
     margin-top: 10px;
 }
 
-button:hover:not(:disabled) {
+button[type="submit"]:hover:not(:disabled) {
     transform: translateY(-3px);
     box-shadow: 0 10px 25px rgba(255, 140, 66, 0.4);
 }
 
-button:disabled {
+button[type="submit"]:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-button:active {
-    transform: translateY(0);
-}
-.search-btn {
-    position: absolute;
-    right: 5px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-    border: none;
-    color: white;
-    padding: 10px 20px;
-    border-radius: 25px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: 0.3s;
-}
-
-.search-btn:hover {
-    transform: translateY(-50%) scale(1.05);
-}
 .info-box {
     background: #fff9e6;
     border-left: 4px solid var(--warning);
@@ -597,6 +634,10 @@ button:active {
     
     .form-header h2 {
         font-size: 24px;
+    }
+    
+    .preview-item {
+        width: calc(50% - 5px);
     }
 }
 </style>
@@ -680,7 +721,7 @@ button:active {
 
         <div class="info-box">
             <strong>💡 Wskazówki:</strong><br>
-            • Dodaj wyraźne zdjęcie produktu<br>
+            • Dodaj do 5 wyraźnych zdjęć produktu<br>
             • Opisz szczegółowo stan i właściwości<br>
             • Ustal uczciwą cenę<br>
             • Nie używaj wulgaryzmów i nieodpowiednich słów
@@ -715,18 +756,16 @@ button:active {
             </div>
 
             <div class="form-group">
-                <label>Zdjęcie produktu</label>
+                <label>Zdjęcia produktu (max 5)</label>
                 <div class="file-upload">
-                    <input type="file" name="zdjecie" accept="image/*" id="fileInput" class="file-input" <?= $remainingToday == 0 ? 'disabled' : '' ?>>
+                    <input type="file" name="zdjecia[]" accept="image/*" id="fileInput" class="file-input" multiple <?= $remainingToday == 0 ? 'disabled' : '' ?>>
                     <label for="fileInput" class="file-label" id="fileLabel">
                         <div class="file-icon">📷</div>
-                        <div class="file-text">Kliknij lub przeciągnij zdjęcie tutaj</div>
-                        <div class="file-name" id="fileName"></div>
+                        <div class="file-text">Kliknij lub przeciągnij zdjęcia tutaj (max 5)</div>
+                        <div class="file-count" id="fileCount"></div>
                     </label>
                 </div>
-                <div class="preview-container" id="previewContainer">
-                    <img id="imagePreview" class="preview-image" alt="Podgląd">
-                </div>
+                <div class="preview-container" id="previewContainer"></div>
             </div>
 
             <button type="submit" <?= $remainingToday == 0 ? 'disabled' : '' ?>>
@@ -759,38 +798,72 @@ opisField.addEventListener('input', function() {
     }
 });
 
-// Obsługa pliku
+// Obsługa wielu plików
 const fileInput = document.getElementById('fileInput');
 const fileLabel = document.getElementById('fileLabel');
-const fileName = document.getElementById('fileName');
+const fileCount = document.getElementById('fileCount');
 const previewContainer = document.getElementById('previewContainer');
-const imagePreview = document.getElementById('imagePreview');
+let selectedFiles = [];
 
 fileInput.addEventListener('change', function() {
-    if (this.files && this.files[0]) {
-        const file = this.files[0];
-        fileName.textContent = '✓ ' + file.name;
+    handleFiles(this.files);
+});
+
+function handleFiles(files) {
+    if (files.length > 5) {
+        alert('Możesz dodać maksymalnie 5 zdjęć!');
+        fileInput.value = '';
+        return;
+    }
+    
+    selectedFiles = Array.from(files);
+    updatePreview();
+}
+
+function updatePreview() {
+    previewContainer.innerHTML = '';
+    
+    if (selectedFiles.length > 0) {
+        fileCount.textContent = `✓ Wybrano ${selectedFiles.length} ${selectedFiles.length === 1 ? 'zdjęcie' : 'zdjęć'}`;
         fileLabel.classList.add('has-file');
+        previewContainer.classList.add('show');
         
-        // Podgląd
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            imagePreview.src = e.target.result;
-            previewContainer.classList.add('show');
-        };
-        reader.readAsDataURL(file);
+        selectedFiles.forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const previewItem = document.createElement('div');
+                previewItem.className = 'preview-item';
+                previewItem.innerHTML = `
+                    <img src="${e.target.result}" class="preview-image" alt="Podgląd ${index + 1}">
+                    <button type="button" class="remove-image" onclick="removeImage(${index})">×</button>
+                `;
+                previewContainer.appendChild(previewItem);
+            };
+            reader.readAsDataURL(file);
+        });
     } else {
-        fileName.textContent = '';
+        fileCount.textContent = '';
         fileLabel.classList.remove('has-file');
         previewContainer.classList.remove('show');
     }
-});
+}
+
+function removeImage(index) {
+    selectedFiles.splice(index, 1);
+    
+    // Aktualizuj input file
+    const dt = new DataTransfer();
+    selectedFiles.forEach(file => dt.items.add(file));
+    fileInput.files = dt.files;
+    
+    updatePreview();
+}
 
 // Drag & Drop
 fileLabel.addEventListener('dragover', function(e) {
     e.preventDefault();
     this.style.borderColor = 'var(--primary)';
-    this.style.background = '#f0f0ff';
+    this.style.background = '#ffe0cc';
 });
 
 fileLabel.addEventListener('dragleave', function() {
@@ -805,8 +878,7 @@ fileLabel.addEventListener('drop', function(e) {
     
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-        fileInput.files = files;
-        fileInput.dispatchEvent(new Event('change'));
+        handleFiles(files);
     }
 });
 </script>
