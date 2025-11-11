@@ -5,9 +5,9 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 
-$host = "localhost";
-$user = "root";
-$pass = "";
+$host = "192.168.1.202";
+$user = "sklepuser";
+$pass = "twojehaslo";
 $dbname = "sklep";
 
 $conn = new mysqli($host, $user, $pass, $dbname);
@@ -1017,3 +1017,4 @@ document.addEventListener('DOMContentLoaded', function() {
 </body>
 </html>
 <?php $conn->close(); ?>
+
