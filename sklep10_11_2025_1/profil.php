@@ -5,9 +5,9 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 
-$host = "192.168.1.202";
-$user = "sklepuser";
-$pass = "twojehaslo";
+$host = "localhost";
+$user = "root";
+$pass = "";
 $dbname = "sklep";
 
 $conn = new mysqli($host, $user, $pass, $dbname);
@@ -18,22 +18,6 @@ $profile_id = intval($_GET['id'] ?? $_SESSION['user_id']);
 $msg = '';
 $msgType = '';
 $search = '';
-
-// Funkcja do pobierania pierwszego zdjęcia (taka sama jak w index.php)
-function getFirstImage($zdjecie) {
-    if (empty($zdjecie)) {
-        return null;
-    }
-    
-    // Sprawdź czy to JSON (nowy format)
-    $decoded = json_decode($zdjecie, true);
-    if (is_array($decoded) && !empty($decoded)) {
-        return $decoded[0]; // Pierwsze zdjęcie z tablicy
-    }
-    
-    // Stary format - pojedyncze zdjęcie
-    return $zdjecie;
-}
 
 // Pobierz nieprzeczytane wiadomości
 $unread_count = 0;
@@ -105,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['user_id'] == $profile_id
 if (isset($_GET['delete']) && $_SESSION['user_id'] == $profile_id) {
     $delete_id = intval($_GET['delete']);
     
-    // Pobierz ścieżki zdjęć przed usunięciem
+    // Pobierz ścieżkę zdjęcia przed usunięciem
     $stmt = $conn->prepare("SELECT zdjecie FROM produkty WHERE id=? AND id_sprzedawcy=?");
     $stmt->bind_param("ii", $delete_id, $profile_id);
     $stmt->execute();
@@ -119,27 +103,15 @@ if (isset($_GET['delete']) && $_SESSION['user_id'] == $profile_id) {
         $stmt->execute();
         $stmt->close();
         
-        // Usuń zdjęcia z serwera
+        // Usuń zdjęcie z serwera
         if (!empty($prodData['zdjecie'])) {
-            $decoded = json_decode($prodData['zdjecie'], true);
-            if (is_array($decoded)) {
-                // Nowy format - wiele zdjęć
-                foreach ($decoded as $imgPath) {
-                    $fullPath = __DIR__ . "/" . $imgPath;
-                    if (file_exists($fullPath)) {
-                        unlink($fullPath);
-                    }
-                }
-            } else {
-                // Stary format - jedno zdjęcie
-                $imgPath = __DIR__ . "/" . $prodData['zdjecie'];
-                if (file_exists($imgPath)) {
-                    unlink($imgPath);
-                }
+            $imgPath = __DIR__ . "/" . $prodData['zdjecie'];
+            if (file_exists($imgPath)) {
+                unlink($imgPath);
             }
         }
         
-        $msg = "Produkt i jego zdjęcia zostały usunięte!";
+        $msg = "Produkt i jego zdjęcie zostały usunięte!";
         $msgType = "success";
     }
 }
@@ -846,9 +818,6 @@ body {
                         <div class="stat-label">Szkoła</div>
                     </div>
                 </div>
-                <div style="margin-top: 20px;">
-                    <?= getRatingHTML($profile_id, false) ?>
-                </div>
             </div>
         </div>
 
@@ -891,16 +860,7 @@ body {
             <?php endif; ?>
         <?php endif; ?>
     </div>
-    <div style="margin-top: 20px;">
-            <?php 
-            if (function_exists('getRatingHTML')) {
-                echo getRatingHTML($profile_id, false);
-            } else {
-                echo '<div style="padding:20px;background:#fee;border-radius:10px;color:#c33;">Błąd: Funkcja ocen nie jest dostępna. Sprawdź config.php</div>';
-            }
-            ?>
-    </div>
-    </div>
+
     <div class="products-section">
         <h2>
             <?= $_SESSION['user_id'] == $profile_id ? '🛍️ Twoje produkty' : '🛍️ Produkty użytkownika' ?>
@@ -908,30 +868,16 @@ body {
         
         <div class="products-grid">
             <?php if ($products->num_rows > 0): ?>
-                <?php while ($p = $products->fetch_assoc()): 
-                    $firstImage = getFirstImage($p['zdjecie']);
-                    $isSold = ($p['is_sold'] == 1);
-                ?>
-                    <div class="product-card" style="position: relative;">
-                        <!-- Badge SPRZEDANE -->
-                        <?php if ($isSold): ?>
-                            <div style="position: absolute; top: 0; left: 0; right: 0; background: #10b981; color: white; padding: 10px; text-align: center; font-weight: bold; z-index: 10; border-radius: 15px 15px 0 0;">
-                                ✅ SPRZEDANE!
-                            </div>
-                            <div style="height: 40px;"></div> <!-- Spacer -->
-                        <?php endif; ?>
-                        
-                        <?php if ($firstImage): ?>
-                            <img src="<?= htmlspecialchars($firstImage) ?>" 
+                <?php while ($p = $products->fetch_assoc()): ?>
+                    <div class="product-card">
+                        <?php if (!empty($p['zdjecie'])): ?>
+                            <img src="<?= htmlspecialchars($p['zdjecie']) ?>" 
                                  class="product-image" 
-                                 onclick="window.location='produkt.php?id=<?= $p['id'] ?>'"
-                                 onerror="this.src='https://via.placeholder.com/280x220/ff8c42/ffffff?text=Brak+zdjęcia'"
-                                 style="<?= $isSold ? 'opacity: 0.7; filter: grayscale(30%);' : '' ?>">
+                                 onclick="window.location='produkt.php?id=<?= $p['id'] ?>'">
                         <?php else: ?>
                             <img src="https://via.placeholder.com/280x220/ff8c42/ffffff?text=Brak+zdjęcia" 
                                  class="product-image"
-                                 onclick="window.location='produkt.php?id=<?= $p['id'] ?>'"
-                                 style="<?= $isSold ? 'opacity: 0.7; filter: grayscale(30%);' : '' ?>">
+                                 onclick="window.location='produkt.php?id=<?= $p['id'] ?>'">
                         <?php endif; ?>
                         
                         <div class="product-content">
@@ -950,17 +896,11 @@ body {
                                     <a href="produkt.php?id=<?= $p['id'] ?>" class="btn-small btn-view">
                                         👁️ Zobacz
                                     </a>
-                                    <?php if (!$isSold): ?>
-                                        <a href="profil.php?id=<?= $profile_id ?>&delete=<?= $p['id'] ?>" 
-                                           class="btn-small btn-delete"
-                                           onclick="return confirm('Czy na pewno chcesz usunąć ten produkt?\n\n<?= htmlspecialchars($p['nazwa']) ?>\n\nZostanie usunięty również z serwera wraz ze zdjęciami.')">
-                                            🗑️ Usuń
-                                        </a>
-                                    <?php else: ?>
-                                        <span class="btn-small" style="background: #cbd5e0; color: #4a5568; cursor: not-allowed;">
-                                            ✓ Sprzedane
-                                        </span>
-                                    <?php endif; ?>
+                                    <a href="profil.php?id=<?= $profile_id ?>&delete=<?= $p['id'] ?>" 
+                                       class="btn-small btn-delete"
+                                       onclick="return confirm('Czy na pewno chcesz usunąć ten produkt?\n\n<?= htmlspecialchars($p['nazwa']) ?>\n\nZostanie usunięty również z serwera wraz ze zdjęciem.')">
+                                        🗑️ Usuń
+                                    </a>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -980,103 +920,9 @@ body {
             <?php endif; ?>
         </div>
     </div>
-
 </div>
-
-<?php if ($_SESSION['user_id'] == $profile_id && $sold_products->num_rows > 0): ?>
-<div class="products-section" style="margin-top: 40px;">
-    <h2>✅ Sprzedane produkty</h2>
-    
-    <div class="products-grid">
-        <?php while ($sp = $sold_products->fetch_assoc()): 
-            $firstImage = getFirstImage($sp['zdjecie']);
-            
-            // Pobierz dane kupującego
-            $buyer_stmt = $conn->prepare("SELECT username FROM logi WHERE id = ?");
-            $buyer_stmt->bind_param("i", $sp['buyer_id']);
-            $buyer_stmt->execute();
-            $buyer_data = $buyer_stmt->get_result()->fetch_assoc();
-            $buyer_stmt->close();
-            $buyer_name = $buyer_data['username'] ?? 'Nieznany kupujący';
-        ?>
-            <div class="product-card" style="position: relative; border: 3px solid #10b981;">
-                <!-- Badge SPRZEDANE -->
-                <div style="position: absolute; top: 0; left: 0; right: 0; background: #10b981; color: white; padding: 10px; text-align: center; font-weight: bold; z-index: 10; border-radius: 12px 12px 0 0;">
-                    ✅ SPRZEDANE!
-                </div>
-                <div style="height: 40px;"></div>
-                
-                <?php if ($firstImage): ?>
-                    <img src="<?= htmlspecialchars($firstImage) ?>" 
-                         class="product-image" 
-                         onclick="window.location='produkt.php?id=<?= $sp['id'] ?>'"
-                         style="opacity: 0.7; filter: grayscale(30%);"
-                         onerror="this.src='https://via.placeholder.com/280x220/10b981/ffffff?text=Sprzedane'">
-                <?php else: ?>
-                    <img src="https://via.placeholder.com/280x220/10b981/ffffff?text=Sprzedane" 
-                         class="product-image"
-                         onclick="window.location='produkt.php?id=<?= $sp['id'] ?>'"
-                         style="opacity: 0.7;">
-                <?php endif; ?>
-                
-                <div class="product-content">
-                    <div class="product-name" onclick="window.location='produkt.php?id=<?= $sp['id'] ?>'">
-                        <?= htmlspecialchars($sp['nazwa']) ?>
-                    </div>
-                    <div class="product-price" style="color: #10b981;"><?= number_format($sp['cena'], 2) ?> zł</div>
-                    
-                    <div class="product-meta" style="flex-direction: column; gap: 5px; align-items: flex-start;">
-                        <span style="color: #10b981; font-weight: bold;">👤 Kupujący: <?= htmlspecialchars($buyer_name) ?></span>
-                        <span>📅 Sprzedano: <?= date('d.m.Y', strtotime($sp['sold_at'])) ?></span>
-                        <span>📦 Dodano: <?= date('d.m.Y', strtotime($sp['data_dodania'])) ?></span>
-                    </div>
-                    
-                    <div class="product-actions">
-                        <a href="produkt.php?id=<?= $sp['id'] ?>" class="btn-small btn-view">
-                            👁️ Zobacz
-                        </a>
-                        <a href="czat.php?produkt_id=<?= $sp['id'] ?>&user_id=<?= $sp['buyer_id'] ?>" 
-                           class="btn-small"
-                           style="background: #10b981; color: white;">
-                            💬 Czat
-                        </a>
-                    </div>
-                </div>
-            </div>
-        <?php endwhile; ?>
-    </div>
-</div>
-<?php endif; ?>
-
-<style>
-/* Dodatkowe style dla sekcji sprzedanych */
-.product-card {
-    transition: all 0.3s;
-}
-
-.product-card:hover {
-    border-color: #059669 !important;
-}
-
-.product-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-    color: #999;
-    margin-bottom: 15px;
-}
-
-@media (max-width: 768px) {
-    .product-meta {
-        font-size: 11px;
-    }
-}
-</style>
-
-</body>
 <script>
-// Toast Notifications
+
 function showToast(type, title, message, duration = 5000) {
     let container = document.querySelector('.toast-container');
     if (!container) {
@@ -1168,5 +1014,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+</body>
 </html>
-<?php $conn->close(); ?>    
+<?php $conn->close(); ?>
